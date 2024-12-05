@@ -18,7 +18,7 @@ type Peer struct {
 func main() {
 	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
 	if err != nil {
-		log.Fatalf("%v", err)
+		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
 	s := &http.Server{
