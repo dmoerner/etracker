@@ -20,6 +20,11 @@ func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 func TestTables(t *testing.T) {
 	testdb := os.Getenv("PGDATABASE") + "_test"
 	dbpool, err := DbConnect(testdb)
+	defer func() {
+		// pgxpool.Pool.Close() returns nothing, but some linters seem to think it does
+		// and warn when deferring without a function.
+		dbpool.Close()
+	}()
 
 	if err != nil {
 		t.Fatalf("%v", err)
