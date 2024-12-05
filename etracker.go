@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Peer struct {
@@ -33,16 +31,4 @@ func main() {
 		log.Fatalf("Unable to start HTTP server: %v", err)
 	}
 
-}
-
-func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		query := r.URL.Query()
-		_ = query
-
-		_, err := w.Write(FailureReason("not implemented"))
-		if err != nil {
-			log.Printf("Error handling connection: %v", err)
-		}
-	}
 }
