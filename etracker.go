@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -18,7 +16,7 @@ type Peer struct {
 }
 
 func main() {
-	dbpool, err := dbConnect()
+	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -35,50 +33,6 @@ func main() {
 		log.Fatalf("Unable to start HTTP server: %v", err)
 	}
 
-}
-
-// dbConnect connects to the postgres db and ensures the basic tables are set up.
-func dbConnect() (*pgxpool.Pool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	dbpool, err := pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to db: %w", err)
-	}
-	defer dbpool.Close()
-
-	// cf. https://x-team.com/blog/automatic-timestamps-with-postgresql
-	_, err = dbpool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS peers (
-			id SERIAL PRIMARY KEY,
-			peer_id VARCHAR(20) NOT NULL,
-			ip_port VARCHAR(6) NOT NULL,
-			info_hash VARCHAR(20) NOT NULL,
-			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_info_hash ON peers(info_hash);
-
-		CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-		RETURNS TRIGGER AS $$
-		BEGIN
-			NEW.last_announce = NOW();
-			RETURN NEW;
-		END;
-		$$ LANGUAGE plpgsql;
-
-		CREATE OR REPLACE TRIGGER set_timestamp
-		BEFORE UPDATE ON peers
-		FOR EACH ROW
-		EXECUTE PROCEDURE trigger_set_timestamp();
-	`)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to create tables: %w", err)
-	}
-
-	return dbpool, nil
 }
 
 func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Request) {
