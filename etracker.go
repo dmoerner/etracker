@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type Peer struct {
@@ -14,6 +16,17 @@ type Peer struct {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
+		log.Fatal("DATABASE_URL not set in environment")
+	}
+	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
+		log.Fatal("PGDATABASE not set in environment")
+	}
+
 	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)

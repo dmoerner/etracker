@@ -2,13 +2,42 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
-func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
+var dbpool *pgxpool.Pool
+
+func TestMain(m *testing.M) {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
+	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
+		log.Fatal("DATABASE_URL not set in environment")
+	}
+	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
+		log.Fatal("PGDATABASE not set in environment")
+	}
+
+	testdb := os.Getenv("PGDATABASE") + "_test"
+	dbpool, err = DbConnect(testdb)
+
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	exitCode := m.Run()
+
+	dbpool.Close()
+
+	os.Exit(exitCode)
+}
+
+func tableExists(tablename string) (bool, error) {
 	var tableExists bool
 	err := dbpool.QueryRow(context.Background(),
 		"select exists (select from pg_tables where tablename = $1);", tablename).Scan(&tableExists)
@@ -18,19 +47,7 @@ func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 }
 
 func TestTables(t *testing.T) {
-	testdb := os.Getenv("PGDATABASE") + "_test"
-	dbpool, err := DbConnect(testdb)
-	defer func() {
-		// pgxpool.Pool.Close() returns nothing, but some linters seem to think it does
-		// and warn when deferring without a function.
-		dbpool.Close()
-	}()
-
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	ok, err := tableExists(dbpool, "peers")
+	ok, err := tableExists("peers")
 
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -45,7 +62,7 @@ func TestTables(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	ok, err = tableExists(dbpool, "peers")
+	ok, err = tableExists("peers")
 
 	if err != nil {
 		t.Fatalf("%v", err)
