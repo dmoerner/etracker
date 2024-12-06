@@ -24,14 +24,15 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// cf. https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
-			peer_id VARCHAR(20) NOT NULL,
-			ip_port VARCHAR(6) NOT NULL,
-			info_hash VARCHAR(20) NOT NULL,
+			peer_id BYTEA NOT NULL,
+			ip_port BYTEA NOT NULL,
+			info_hash BYTEA NOT NULL,
 			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (peer_id, ip_port)
+			PRIMARY KEY (peer_id, info_hash)
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_info_hash ON peers(info_hash);
+
 
 		CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 		RETURNS TRIGGER AS $$
