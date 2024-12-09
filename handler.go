@@ -20,17 +20,18 @@ type Announce struct {
 }
 
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
-// 6-byte compact format expected by BEP 23.
-func encodeAddr(remoteAddr string) ([]byte, error) {
+// 6-byte compact format expected by BEP 23. The port used is extracted from
+// the client announce; the RemoteAddr port is ignored.
+func encodeAddr(remoteAddr string, port []byte) ([]byte, error) {
 	splitAddr := strings.Split(remoteAddr, ":")
 
 	if len(splitAddr) != 2 {
 		return nil, fmt.Errorf("invalid address format: %s", remoteAddr)
 	}
 
-	ipString, portString := splitAddr[0], splitAddr[1]
+	ipString := splitAddr[0]
 
-	portInt, err := strconv.Atoi(portString)
+	portInt, err := strconv.Atoi(string(port))
 	if err != nil {
 		return nil, fmt.Errorf("error converting port to int: %w", err)
 	}
@@ -71,7 +72,12 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 		return nil, err
 	}
 
-	ip_port, err := encodeAddr(r.RemoteAddr)
+	port, err := queryHead(query["port"])
+	if err != nil {
+		return nil, err
+	}
+
+	ip_port, err := encodeAddr(r.RemoteAddr, port)
 	if err != nil {
 		return nil, fmt.Errorf("error encoding remote address: %w", err)
 	}
