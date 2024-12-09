@@ -10,9 +10,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var dbpool *pgxpool.Pool
+func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
+	var tableExists bool
+	err := dbpool.QueryRow(context.Background(),
+		"select exists (select from pg_tables where tablename = $1);", tablename).Scan(&tableExists)
 
-func TestMain(m *testing.M) {
+	return tableExists, err
+}
+
+func TestTables(t *testing.T) {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -25,30 +31,12 @@ func TestMain(m *testing.M) {
 	}
 
 	testdb := os.Getenv("PGDATABASE") + "_test"
-	dbpool, err = DbConnect(testdb)
-
+	dbpool, err := DbConnect(testdb)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	exitCode := m.Run()
 
-	dbpool.Close()
-
-	os.Exit(exitCode)
-}
-
-func tableExists(tablename string) (bool, error) {
-	var tableExists bool
-	err := dbpool.QueryRow(context.Background(),
-		"select exists (select from pg_tables where tablename = $1);", tablename).Scan(&tableExists)
-
-	return tableExists, err
-
-}
-
-func TestTables(t *testing.T) {
-	ok, err := tableExists("peers")
-
+	ok, err := tableExists(dbpool, "peers")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
@@ -62,7 +50,7 @@ func TestTables(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	ok, err = tableExists("peers")
+	ok, err = tableExists(dbpool, "peers")
 
 	if err != nil {
 		t.Fatalf("%v", err)
@@ -71,4 +59,5 @@ func TestTables(t *testing.T) {
 	if ok {
 		t.Fatalf("peers table exists after drop")
 	}
+	dbpool.Close()
 }
