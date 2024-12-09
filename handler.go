@@ -13,6 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type Announce struct {
+	peer_id   []byte
+	ip_port   []byte
+	info_hash []byte
+}
+
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
 // 6-byte compact format expected by BEP 23.
 func encodeAddr(remoteAddr string) ([]byte, error) {
@@ -50,32 +56,42 @@ func queryHead(query []string) ([]byte, error) {
 	return []byte(query[0]), nil
 }
 
-// handleAnnounce extracts the relevant information from a client's http request
-// and inserts it into the peers table.
-func handleAnnounce(dbpool *pgxpool.Pool, r *http.Request) error {
+// parseAnnounce parses a request to construct an announce struct, and returns
+// a pointer to the struct and any error.
+func parseAnnounce(r *http.Request) (*Announce, error) {
 	query := r.URL.Query()
 
 	peer_id, err := queryHead(query["peer_id"])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	info_hash, err := queryHead(query["info_hash"])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	ip_port, err := encodeAddr(r.RemoteAddr)
 	if err != nil {
-		return fmt.Errorf("error encoding remote address: %w", err)
+		return nil, fmt.Errorf("error encoding remote address: %w", err)
 	}
 
-	_, err = dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
+	var announce Announce
+
+	announce.peer_id = peer_id
+	announce.info_hash = info_hash
+	announce.ip_port = ip_port
+
+	return &announce, nil
+}
+
+// writeAnnounce updates the peers table with an announce.
+func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
+	_, err := dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
 		VALUES ($1, $2, $3) 
 		ON CONFLICT (peer_id, info_hash) 
 		DO UPDATE SET ip_port = $2;`,
-		peer_id, ip_port, info_hash)
-
+		announce.peer_id, announce.ip_port, announce.info_hash)
 	if err != nil {
 		return fmt.Errorf("error upserting peer row: %w", err)
 	}
@@ -86,7 +102,7 @@ func handleAnnounce(dbpool *pgxpool.Pool, r *http.Request) error {
 // sendReply writes a bencoded reply to the client consisting of an appropriate
 // peer list. Tracker error messages will generally be sent by the parent
 // PeerHandler due to earlier failures.
-func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, r *http.Request) error {
+func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 	_, err := w.Write(FailureReason("not implemented"))
 	if err != nil {
 		return fmt.Errorf("error replying to peer: %w", err)
@@ -104,9 +120,20 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		err := handleAnnounce(dbpool, r)
+		announce, err := parseAnnounce(r)
 		if err != nil {
-			log.Printf("Error handling announce: %v", err)
+			log.Printf("Error parsing announce: %v", err)
+
+			_, err = w.Write(FailureReason("tracker error"))
+			if err != nil {
+				log.Printf("Error responding to peer: %v", err)
+			}
+			return
+		}
+
+		err = writeAnnounce(dbpool, announce)
+		if err != nil {
+			log.Printf("Error writing announce to db: %v", err)
 
 			_, err = w.Write(FailureReason("tracker error"))
 			if err != nil {
@@ -116,8 +143,7 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 
 		}
 
-		err = sendReply(dbpool, w, r)
-
+		err = sendReply(dbpool, w, announce)
 		if err != nil {
 			log.Printf("Error responding to peer: %v", err)
 		}
