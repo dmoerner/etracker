@@ -26,7 +26,18 @@ type Request struct {
 	event      *string
 }
 
-func TestHandler(t *testing.T) {
+func formatRequest(request Request) string {
+	return fmt.Sprintf(
+		"http://example.com/?peer_id=%s&info_hash=%s&port=%s&uploaded=%s&downloaded=%s&left=%s",
+		request.peer_id,
+		request.info_hash,
+		request.port,
+		request.uploaded,
+		request.downloaded,
+		request.left)
+}
+
+func TestAnnounceWrite(t *testing.T) {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -50,16 +61,7 @@ func TestHandler(t *testing.T) {
 		left:       "0",
 	}
 
-	path := fmt.Sprintf(
-		"http://example.com/?peer_id=%s&info_hash=%s&port=%s&uploaded=%s&downloaded=%s&left=%s",
-		request.peer_id,
-		request.info_hash,
-		request.port,
-		request.uploaded,
-		request.downloaded,
-		request.left)
-
-	req := httptest.NewRequest("GET", path, nil)
+	req := httptest.NewRequest("GET", formatRequest(request), nil)
 	w := httptest.NewRecorder()
 
 	handler := PeerHandler(dbpool)
