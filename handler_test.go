@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -69,8 +70,9 @@ func TestAnnounceWrite(t *testing.T) {
 	var peer_id []byte
 	var ip_port []byte
 	var info_hash []byte
+	var last_announce time.Time
 
-	err = dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash)
+	err = dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}
@@ -92,6 +94,11 @@ func TestAnnounceWrite(t *testing.T) {
 		t.Errorf("ip_port: expected %v, got %v", expectedIpPort.Bytes(), ip_port)
 	}
 
+	if !last_announce.Before(time.Now()) || !last_announce.After(time.Now().Add(-time.Second)) {
+		t.Error("last_announce outside one second delta from present")
+	}
+
+	// Cleanup
 	_, err = dbpool.Exec(context.Background(), "DROP TABLE peers;")
 	if err != nil {
 		t.Fatalf("error dropping table on db cleanup: %v", err)
