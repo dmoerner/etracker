@@ -2,18 +2,12 @@ package main
 
 import (
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/joho/godotenv"
 )
-
-type Peer struct {
-	ip   net.IP
-	port int
-}
 
 func main() {
 	err := godotenv.Load()
@@ -43,5 +37,4 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to start HTTP server: %v", err)
 	}
-
 }

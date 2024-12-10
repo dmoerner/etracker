@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strconv"
 	"testing"
 
 	bencode "github.com/jackpal/bencode-go"
@@ -29,15 +30,10 @@ func TestFail(t *testing.T) {
 // reflectExpected uses "github.com/jackpal/bencode-go" to generate reference
 // expected bencode results. That is a fully-functioned library which uses
 // reflection to bencode arbitrary data structures.
-func reflectExpected(peers []Peer) []byte {
-	var expectedPeers bytes.Buffer
-	for i := range peers {
-		expectedPeers.Write([]byte(peers[i].ip.To4()))
-		binary.Write(&expectedPeers, binary.BigEndian, uint16(peers[i].port))
-	}
+func reflectExpected(peers [][]byte) []byte {
 	expectedMap := map[string]string{
 		"interval": "1800",
-		"peers":    expectedPeers.String(),
+		"peers":    string(bytes.Join(peers, []byte(""))),
 	}
 	var expected bytes.Buffer
 	err := bencode.Marshal(&expected, expectedMap)
@@ -47,13 +43,32 @@ func reflectExpected(peers []Peer) []byte {
 	return expected.Bytes()
 }
 
+func encodeIpPort(ip string, port string) []byte {
+	var peer bytes.Buffer
+	_, err := peer.Write(net.ParseIP(ip).To4())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	portInt, err := strconv.Atoi(port)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = binary.Write(&peer, binary.BigEndian, uint16(portInt))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return peer.Bytes()
+}
+
 func TestPeers(t *testing.T) {
-	peers := []Peer{
-		{net.ParseIP("10.0.0.1"), 8080},
-		{net.ParseIP("10.0.0.2"), 8080},
-		{net.ParseIP("10.0.0.3"), 8080},
-		{net.ParseIP("10.0.0.4"), 8080},
-		{net.ParseIP("10.0.0.5"), 8080},
+	peers := make([][]byte, 0, 8)
+	for i := 1; i <= 8; i += 1 {
+		ip := "10.0.0." + strconv.Itoa(i)
+		port := "808" + strconv.Itoa(i)
+		peers = append(peers, encodeIpPort(ip, port))
 	}
 
 	result := PeerList(peers)
@@ -67,12 +82,11 @@ func TestPeers(t *testing.T) {
 
 // randomPeer generates random peers for benchmarking. Adapted from
 // https://gist.github.com/porjo/f1e6b79af77893ee71e857dfba2f8e9a
-func randomPeer() Peer {
-	ipSlice := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ipSlice, rand.Uint32())
-	ip := net.ParseIP(string(ipSlice))
-	port := rand.Intn(int(math.Pow(2, 16)))
-	return Peer{ip, port}
+func randomPeer() []byte {
+	var peer bytes.Buffer
+	binary.Write(&peer, binary.BigEndian, rand.Uint32())
+	binary.Write(&peer, binary.BigEndian, uint16(rand.Intn(int(math.Pow(2, 16)))))
+	return peer.Bytes()
 }
 
 var blackhole []byte
@@ -82,7 +96,7 @@ var blackhole []byte
 // large peer lists.
 func BenchmarkNonReflect(b *testing.B) {
 	size := 1000
-	data := make([]Peer, size)
+	data := make([][]byte, 0, size)
 	for i := 0; i < size; i++ {
 		data = append(data, randomPeer())
 	}
@@ -94,7 +108,7 @@ func BenchmarkNonReflect(b *testing.B) {
 
 func BenchmarkReflectLibrary(b *testing.B) {
 	size := 1000
-	data := make([]Peer, size)
+	data := make([][]byte, 0, size)
 	for i := 0; i < size; i++ {
 		data = append(data, randomPeer())
 	}

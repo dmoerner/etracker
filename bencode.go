@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"log"
 )
@@ -26,27 +25,14 @@ func FailureReason(msg string) []byte {
 
 // PeerList returns a bencoded list of peers using the compact format.
 // For more information, see BEP 23.
-func PeerList(peers []Peer) []byte {
-	var bencodedPeers bytes.Buffer
-	peersLength := 0
-	for i := range peers {
-		n, err := bencodedPeers.Write([]byte(peers[i].ip.To4()))
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Write a two-byte array for the port.
-		err = binary.Write(&bencodedPeers, binary.BigEndian, uint16(peers[i].port))
-		if err != nil {
-			log.Fatal(err)
-		}
-		peersLength += n + 2
-	}
+func PeerList(peers [][]byte) []byte {
+	joinedPeers := bytes.Join(peers, []byte(""))
 	var bencoded bytes.Buffer
 	_, err := fmt.Fprintf(&bencoded, "d8:interval%d:%s5:peers%d:%se",
 		len(Interval),
 		Interval,
-		peersLength,
-		bencodedPeers.Bytes())
+		len(joinedPeers),
+		joinedPeers)
 	if err != nil {
 		log.Fatal(err)
 	}

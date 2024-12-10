@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -109,7 +110,22 @@ func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
 // peer list. Tracker error messages will generally be sent by the parent
 // PeerHandler due to earlier failures.
 func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
-	_, err := w.Write(FailureReason("not implemented"))
+	rows, err := dbpool.Query(context.Background(),
+		`SELECT ip_port FROM peers 
+		WHERE info_hash = $1 AND peer_id <> $2;`,
+		a.info_hash,
+		a.peer_id)
+	if err != nil {
+		return fmt.Errorf("error selecting peer rows: %w", err)
+	}
+	defer rows.Close()
+
+	peers, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
+	if err != nil {
+		return fmt.Errorf("error collecting rows: %w", err)
+	}
+
+	_, err = w.Write(PeerList(peers))
 	if err != nil {
 		return fmt.Errorf("error replying to peer: %w", err)
 	}
