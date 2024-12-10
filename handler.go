@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const interval = "60 minutes"
+
 type Announce struct {
 	peer_id   []byte
 	ip_port   []byte
@@ -124,12 +126,13 @@ func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
 // pseudorandom contiguous subset of the peers of the appropriate size will be
 // sent. Given different client announce intervals, this should provide enough
 // randomness, but it may be something revisit.
+//
+// PostgreSQL doesn't substitute inside of string literals, so to use a variable
+// for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
+// https://github.com/jackc/pgx/issues/1043
 func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
-	rows, err := dbpool.Query(context.Background(),
-		`SELECT ip_port FROM peers 
-		WHERE info_hash = $1 AND peer_id <> $2;`,
-		a.info_hash,
-		a.peer_id)
+	query := fmt.Sprintf(`SELECT ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
+	rows, err := dbpool.Query(context.Background(), query, a.info_hash, a.peer_id)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)
 	}
