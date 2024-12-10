@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -39,7 +40,7 @@ func formatRequest(request Request) string {
 		request.left)
 }
 
-func TestAnnounceWrite(t *testing.T) {
+func setupTestDB() *pgxpool.Pool {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -53,6 +54,23 @@ func TestAnnounceWrite(t *testing.T) {
 
 	testdb := os.Getenv("PGDATABASE") + "_test"
 	dbpool, err := DbConnect(testdb)
+	if err != nil {
+		log.Fatalf("Unable to connect to dest db: %v", err)
+	}
+	return dbpool
+}
+
+func teardownTestDB(dbpool *pgxpool.Pool) {
+	_, err := dbpool.Exec(context.Background(), "DROP TABLE peers;")
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
+
+	dbpool.Close()
+}
+
+func TestAnnounceWrite(t *testing.T) {
+	dbpool := setupTestDB()
 
 	request := Request{
 		peer_id:   "-TR4060-7ltqlx8z3ch4",
@@ -72,7 +90,7 @@ func TestAnnounceWrite(t *testing.T) {
 	var info_hash []byte
 	var last_announce time.Time
 
-	err = dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
+	err := dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}
@@ -98,11 +116,5 @@ func TestAnnounceWrite(t *testing.T) {
 		t.Error("last_announce outside one second delta from present")
 	}
 
-	// Cleanup
-	_, err = dbpool.Exec(context.Background(), "DROP TABLE peers;")
-	if err != nil {
-		t.Fatalf("error dropping table on db cleanup: %v", err)
-	}
-
-	dbpool.Close()
+	teardownTestDB(dbpool)
 }
