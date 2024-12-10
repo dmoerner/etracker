@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"strconv"
@@ -18,6 +19,7 @@ type Announce struct {
 	peer_id   []byte
 	ip_port   []byte
 	info_hash []byte
+	numwant   int
 }
 
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
@@ -78,6 +80,13 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 		return nil, err
 	}
 
+	// We ignore errors in parsing, since we will use a default value.
+	numwantBytes, _ := queryHead(query["port"])
+	numwant, err := strconv.Atoi(string(numwantBytes))
+	if err != nil || numwant < 0 || numwant > 100 {
+		numwant = 50
+	}
+
 	ip_port, err := encodeAddr(r.RemoteAddr, port)
 	if err != nil {
 		return nil, fmt.Errorf("error encoding remote address: %w", err)
@@ -88,6 +97,7 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	announce.peer_id = peer_id
 	announce.info_hash = info_hash
 	announce.ip_port = ip_port
+	announce.numwant = numwant
 
 	return &announce, nil
 }
@@ -109,6 +119,11 @@ func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
 // sendReply writes a bencoded reply to the client consisting of an appropriate
 // peer list. Tracker error messages will generally be sent by the parent
 // PeerHandler due to earlier failures.
+//
+// If a client requests fewer than the number of available peers, a
+// pseudorandom contiguous subset of the peers of the appropriate size will be
+// sent. Given different client announce intervals, this should provide enough
+// randomness, but it may be something revisit.
 func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 	rows, err := dbpool.Query(context.Background(),
 		`SELECT ip_port FROM peers 
@@ -123,6 +138,11 @@ func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 	peers, err := pgx.CollectRows(rows, pgx.RowTo[[]byte])
 	if err != nil {
 		return fmt.Errorf("error collecting rows: %w", err)
+	}
+
+	if len(peers) > a.numwant {
+		start := rand.Intn(len(peers) - a.numwant)
+		peers = peers[start : start+a.numwant]
 	}
 
 	_, err = w.Write(PeerList(peers))
