@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/joho/godotenv"
@@ -19,19 +18,21 @@ type Request struct {
 	peer_id    string
 	info_hash  string
 	ip         *string
-	port       string
-	uploaded   string
-	downloaded string
-	left       string
+	port       int
+	numwant    int
+	uploaded   int
+	downloaded int
+	left       int
 	event      *string
 }
 
 func formatRequest(request Request) string {
 	return fmt.Sprintf(
-		"http://example.com/?peer_id=%s&info_hash=%s&port=%s&uploaded=%s&downloaded=%s&left=%s",
+		"http://example.com/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
 		request.peer_id,
 		request.info_hash,
 		request.port,
+		request.numwant,
 		request.uploaded,
 		request.downloaded,
 		request.left)
@@ -53,12 +54,9 @@ func TestAnnounceWrite(t *testing.T) {
 	dbpool, err := DbConnect(testdb)
 
 	request := Request{
-		peer_id:    "-TR4060-7ltqlx8z3ch4",
-		info_hash:  "aaaaaaaaaaaaaaaaaaaa",
-		port:       "6881",
-		uploaded:   "0",
-		downloaded: "0",
-		left:       "0",
+		peer_id:   "-TR4060-7ltqlx8z3ch4",
+		info_hash: "aaaaaaaaaaaaaaaaaaaa",
+		port:      6881,
 	}
 
 	req := httptest.NewRequest("GET", formatRequest(request), nil)
@@ -89,11 +87,7 @@ func TestAnnounceWrite(t *testing.T) {
 	// For reasons that are unclear to me, httptest.NewRequest ignores httptest.DefaultNewRequest
 	// and hard-codes this IP instead, following RFC 5737.
 	expectedIpPort.Write([]byte(net.ParseIP("192.0.2.1").To4()))
-	port, err := strconv.Atoi(request.port)
-	if err != nil {
-		t.Fatalf("bad test data: port could not be converted to int: %s", request.port)
-	}
-	binary.Write(&expectedIpPort, binary.BigEndian, uint16(port))
+	binary.Write(&expectedIpPort, binary.BigEndian, uint16(request.port))
 	if !bytes.Equal(ip_port, expectedIpPort.Bytes()) {
 		t.Errorf("ip_port: expected %v, got %v", expectedIpPort.Bytes(), ip_port)
 	}
