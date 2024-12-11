@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackpal/bencode-go"
 	"github.com/joho/godotenv"
 )
 
@@ -26,6 +28,11 @@ type Request struct {
 	downloaded int
 	left       int
 	event      *string
+}
+
+type DummyRequest struct {
+	request  *http.Request
+	recorder *httptest.ResponseRecorder
 }
 
 func formatRequest(request Request) string {
@@ -67,6 +74,60 @@ func teardownTestDB(dbpool *pgxpool.Pool) {
 	}
 
 	dbpool.Close()
+}
+
+func TestPeerList(t *testing.T) {
+	dbpool := setupTestDB()
+
+	requests := []Request{
+		{
+			peer_id:   "-TR4060-bbbbbbbbbbbb",
+			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   "-TR4060-aaaaaaaaaaaa",
+			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			port:      6882,
+			numwant:   1,
+		},
+		{
+			peer_id:   "-TR4060-cccccccccccc",
+			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			port:      6883,
+			numwant:   1,
+		},
+	}
+
+	var dummyRequests []DummyRequest
+
+	handler := PeerHandler(dbpool)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		handler(w, req)
+	}
+
+	lastIndex := len(dummyRequests) - 1
+
+	resp := dummyRequests[lastIndex].recorder.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	// Use type assertions to extract the compacted peerlist, which
+	// uses 6 bytes per peer.
+	peersReceived := []byte(data.(map[string]any)["peers"].(string))
+	numRec := len(peersReceived) / 6
+	if numRec != requests[lastIndex].numwant {
+		t.Errorf("expected %d peers, received %d", requests[lastIndex].numwant, numRec)
+	}
+
+	teardownTestDB(dbpool)
 }
 
 func TestAnnounceWrite(t *testing.T) {

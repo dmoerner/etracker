@@ -83,7 +83,7 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	}
 
 	// We ignore errors in parsing, since we will use a default value.
-	numwantBytes, _ := queryHead(query["port"])
+	numwantBytes, _ := queryHead(query["numwant"])
 	numwant, err := strconv.Atoi(string(numwantBytes))
 	if err != nil || numwant < 0 || numwant > 100 {
 		numwant = 50
