@@ -36,28 +36,32 @@ func TestTables(t *testing.T) {
 		log.Fatalf("%v", err)
 	}
 
-	ok, err := tableExists(dbpool, "peers")
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+	tables := []string{"peers", "infohash_whitelist"}
 
-	if !ok {
-		t.Fatalf("peers table does not exist")
-	}
+	for _, table := range tables {
+		ok, err := tableExists(dbpool, table)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
 
-	_, err = dbpool.Exec(context.Background(), "drop table peers;")
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+		if !ok {
+			t.Fatalf("%s table does not exist", table)
+		}
 
-	ok, err = tableExists(dbpool, "peers")
+		// Postgres doesn't support parameter placeholders for DROP.
+		_, err = dbpool.Exec(context.Background(), "drop table "+table)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
 
-	if err != nil {
-		t.Fatalf("%v", err)
-	}
+		ok, err = tableExists(dbpool, table)
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
 
-	if ok {
-		t.Fatalf("peers table exists after drop")
+		if ok {
+			t.Fatalf("%s table exists after drop", table)
+		}
+
 	}
-	dbpool.Close()
 }

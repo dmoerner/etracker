@@ -47,9 +47,18 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		FOR EACH ROW
 		EXECUTE PROCEDURE trigger_set_timestamp();
 	`)
-
 	if err != nil {
-		return nil, fmt.Errorf("unable to create tables: %w", err)
+		return nil, fmt.Errorf("unable to create peers table: %w", err)
+	}
+
+	_, err = dbpool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS infohash_allowlist (
+			info_hash BYTEA NOT NULL PRIMARY KEY,
+			note TEXT
+		);
+		`)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create infohash_allowlist table: %w", err)
 	}
 
 	return dbpool, nil
