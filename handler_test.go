@@ -35,6 +35,11 @@ type DummyRequest struct {
 	recorder *httptest.ResponseRecorder
 }
 
+const (
+	allowedInfoHash = "aaaaaaaaaaaaaaaaaaaa"
+	deniedInfoHash  = "bbbbbbbbbbbbbbbbbbbb"
+)
+
 func formatRequest(request Request) string {
 	return fmt.Sprintf(
 		"http://example.com/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
@@ -64,11 +69,21 @@ func setupTestDB() *pgxpool.Pool {
 	if err != nil {
 		log.Fatalf("Unable to connect to dest db: %v", err)
 	}
+
+	_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, allowedInfoHash, "test allowed infohash")
+	if err != nil {
+		log.Fatalf("Unable to insert test allowed infohashes: %v", err)
+	}
+
 	return dbpool
 }
 
 func teardownTestDB(dbpool *pgxpool.Pool) {
 	_, err := dbpool.Exec(context.Background(), "DROP TABLE peers;")
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
+	_, err = dbpool.Exec(context.Background(), "DROP TABLE infohash_allowlist;")
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
@@ -82,19 +97,19 @@ func TestPeerList(t *testing.T) {
 	requests := []Request{
 		{
 			peer_id:   "-TR4060-bbbbbbbbbbbb",
-			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			info_hash: allowedInfoHash,
 			port:      6881,
 			numwant:   1,
 		},
 		{
 			peer_id:   "-TR4060-aaaaaaaaaaaa",
-			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			info_hash: allowedInfoHash,
 			port:      6882,
 			numwant:   1,
 		},
 		{
 			peer_id:   "-TR4060-cccccccccccc",
-			info_hash: "aaaaaaaaaaaaaaaaaaaa",
+			info_hash: allowedInfoHash,
 			port:      6883,
 			numwant:   1,
 		},
@@ -130,12 +145,41 @@ func TestPeerList(t *testing.T) {
 	teardownTestDB(dbpool)
 }
 
+func TestDenylistInfoHash(t *testing.T) {
+	dbpool := setupTestDB()
+
+	request := Request{
+		peer_id:   "-TR4060-7ltqlx8z3ch4",
+		info_hash: deniedInfoHash,
+		port:      6881,
+	}
+
+	req := httptest.NewRequest("GET", formatRequest(request), nil)
+	w := httptest.NewRecorder()
+
+	handler := PeerHandler(dbpool)
+
+	handler(w, req)
+
+	resp := w.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	if data.(map[string]any)["failure reason"].(string) != "info_hash not in the allowed list" {
+		t.Errorf("did not error properly with non-allowlisted announce")
+	}
+
+	teardownTestDB(dbpool)
+}
+
 func TestAnnounceWrite(t *testing.T) {
 	dbpool := setupTestDB()
 
 	request := Request{
 		peer_id:   "-TR4060-7ltqlx8z3ch4",
-		info_hash: "aaaaaaaaaaaaaaaaaaaa",
+		info_hash: allowedInfoHash,
 		port:      6881,
 	}
 

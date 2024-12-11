@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -104,9 +105,21 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	return &announce, nil
 }
 
+var ErrInfoHashNotAllowed = errors.New("info_hash not in infohash_allowlist")
+
 // writeAnnounce updates the peers table with an announce.
 func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
-	_, err := dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
+	var b bool
+	err := dbpool.QueryRow(context.Background(),
+		"select exists (select from infohash_allowlist where info_hash = $1);", announce.info_hash).Scan(&b)
+	if err != nil {
+		return fmt.Errorf("error checking infohash_allowlist: %w", err)
+	}
+	if !b {
+		return ErrInfoHashNotAllowed
+	}
+
+	_, err = dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
 		VALUES ($1, $2, $3) 
 		ON CONFLICT (peer_id, info_hash) 
 		DO UPDATE SET ip_port = $2;`,
@@ -167,9 +180,8 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 
 		announce, err := parseAnnounce(r)
 		if err != nil {
-			log.Printf("Error parsing announce: %v", err)
-
-			_, err = w.Write(FailureReason("tracker error"))
+			log.Printf("Error parsing anounce: %v", err)
+			_, err = w.Write(FailureReason("error parsing announce"))
 			if err != nil {
 				log.Printf("Error responding to peer: %v", err)
 			}
@@ -178,9 +190,15 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 
 		err = writeAnnounce(dbpool, announce)
 		if err != nil {
-			log.Printf("Error writing announce to db: %v", err)
 
-			_, err = w.Write(FailureReason("tracker error"))
+			reason := "tracker error"
+			if errors.Is(err, ErrInfoHashNotAllowed) {
+				log.Printf("Not allowed info_hash: %s", announce.info_hash)
+				reason = "info_hash not in the allowed list"
+			} else {
+				log.Printf("Error writing announce to db: %v", err)
+			}
+			_, err = w.Write(FailureReason(reason))
 			if err != nil {
 				log.Printf("Error responding to peer: %v", err)
 			}
