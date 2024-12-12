@@ -156,9 +156,14 @@ func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 		return fmt.Errorf("error collecting rows: %w", err)
 	}
 
-	if len(peers) > a.numwant {
-		start := rand.Intn(len(peers) - a.numwant)
-		peers = peers[start : start+a.numwant]
+	numToGive, err := peersToGive(dbpool, a)
+	if err != nil {
+		return fmt.Errorf("error calculating number of peers to give: %w", err)
+	}
+
+	if len(peers) > numToGive {
+		start := rand.Intn(len(peers) - numToGive)
+		peers = peers[start : start+numToGive]
 	}
 
 	_, err = w.Write(PeerList(peers))
@@ -166,6 +171,36 @@ func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 		return fmt.Errorf("error replying to peer: %w", err)
 	}
 	return nil
+}
+
+// peersToGive takes the database and announce, and returns the number of peers
+// to give and any error. The maximum return value is a.numwant.
+//
+// For distributing peers, we follow a simple algorithm: The more torrents you have
+// in the swarm, the more peers you receive, up to numwant you request.
+//
+// A problem with this algorithm is that freeriders can get around limits by always
+// snatching more torrents. An improvement would count only torrents you are seeding,
+// not torrents you are leeching as well.
+func peersToGive(dbpool *pgxpool.Pool, a *Announce) (int, error) {
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
+	var torrentCount int
+	err := dbpool.QueryRow(context.Background(), query, a.peer_id).Scan(&torrentCount)
+	if err != nil {
+		return 0, fmt.Errorf("error determining seed count: %w", err)
+	}
+
+	var numToGive int
+
+	if torrentCount >= a.numwant {
+		numToGive = a.numwant
+	} else {
+		// Since this algorithm counts the present announce by this client, every client
+		// is guaranteed to get at least one peer.
+		numToGive = torrentCount
+	}
+
+	return numToGive, nil
 }
 
 // PeerHandler encapsulates the handling of each peer request. The first step

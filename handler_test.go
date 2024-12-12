@@ -35,9 +35,22 @@ type DummyRequest struct {
 	recorder *httptest.ResponseRecorder
 }
 
+var peerids = map[int]string{
+	1: "-TR4060-111111111111",
+	2: "-TR4060-111111111112",
+	3: "-TR4060-111111111113",
+	4: "-TR4060-111111111114",
+}
+
+var allowedInfoHashes = map[string]string{
+	"a": "aaaaaaaaaaaaaaaaaaaa",
+	"b": "bbbbbbbbbbbbbbbbbbbb",
+	"c": "cccccccccccccccccccc",
+	"d": "dddddddddddddddddddd",
+}
+
 const (
-	allowedInfoHash = "aaaaaaaaaaaaaaaaaaaa"
-	deniedInfoHash  = "bbbbbbbbbbbbbbbbbbbb"
+	deniedInfoHash = "denydenydenydenydeny"
 )
 
 func formatRequest(request Request) string {
@@ -70,9 +83,11 @@ func setupTestDB() *pgxpool.Pool {
 		log.Fatalf("Unable to connect to dest db: %v", err)
 	}
 
-	_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, allowedInfoHash, "test allowed infohash")
-	if err != nil {
-		log.Fatalf("Unable to insert test allowed infohashes: %v", err)
+	for _, v := range allowedInfoHashes {
+		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")
+		if err != nil {
+			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
+		}
 	}
 
 	return dbpool
@@ -91,25 +106,102 @@ func teardownTestDB(dbpool *pgxpool.Pool) {
 	dbpool.Close()
 }
 
+func TestPoorSeeder(t *testing.T) {
+	dbpool := setupTestDB()
+
+	requests := []Request{
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["a"],
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["b"],
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["c"],
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["a"],
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[3],
+			info_hash: allowedInfoHashes["a"],
+			port:      6883,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[4],
+			info_hash: allowedInfoHashes["a"],
+			port:      6883,
+			numwant:   3,
+		},
+	}
+
+	var dummyRequests []DummyRequest
+
+	handler := PeerHandler(dbpool)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		handler(w, req)
+	}
+
+	lastIndex := len(dummyRequests) - 1
+
+	resp := dummyRequests[lastIndex].recorder.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	// Use type assertions to extract the compacted peerlist, which
+	// uses 6 bytes per peer.
+	peersReceived := []byte(data.(map[string]any)["peers"].(string))
+	numRec := len(peersReceived) / 6
+
+	// Hardcoded for test: We expect that we should receive 1 peer because
+	// we have made announces for 1 torrent, although there are 3 peers
+	// and the peer wanted 3.
+	numToGive := 1
+	if numRec != numToGive {
+		t.Errorf("expected %d peers, received %d", numToGive, numRec)
+	}
+
+	teardownTestDB(dbpool)
+}
+
 func TestPeerList(t *testing.T) {
 	dbpool := setupTestDB()
 
 	requests := []Request{
 		{
-			peer_id:   "-TR4060-bbbbbbbbbbbb",
-			info_hash: allowedInfoHash,
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["a"],
 			port:      6881,
 			numwant:   1,
 		},
 		{
-			peer_id:   "-TR4060-aaaaaaaaaaaa",
-			info_hash: allowedInfoHash,
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["a"],
 			port:      6882,
 			numwant:   1,
 		},
 		{
-			peer_id:   "-TR4060-cccccccccccc",
-			info_hash: allowedInfoHash,
+			peer_id:   peerids[3],
+			info_hash: allowedInfoHashes["a"],
 			port:      6883,
 			numwant:   1,
 		},
@@ -149,7 +241,7 @@ func TestDenylistInfoHash(t *testing.T) {
 	dbpool := setupTestDB()
 
 	request := Request{
-		peer_id:   "-TR4060-7ltqlx8z3ch4",
+		peer_id:   peerids[1],
 		info_hash: deniedInfoHash,
 		port:      6881,
 	}
@@ -178,8 +270,8 @@ func TestAnnounceWrite(t *testing.T) {
 	dbpool := setupTestDB()
 
 	request := Request{
-		peer_id:   "-TR4060-7ltqlx8z3ch4",
-		info_hash: allowedInfoHash,
+		peer_id:   peerids[1],
+		info_hash: allowedInfoHashes["a"],
 		port:      6881,
 	}
 
