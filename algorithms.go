@@ -7,11 +7,11 @@ import (
 	"fmt"
 )
 
-// PeersForAnnounces, aka "Algorithm 1", takes the config and announce, and returns the number of peers
-// to give and any error. The maximum return value is a.numwant.
-//
-// For distributing peers, we follow a simple algorithm: The more torrents you have
-// in the swarm, the more peers you receive, up to numwant you request.
+// NumwantPeers is the non-intelligent algorithm which distributes peers up to
+// the number requested by the client, not including themselves.
+func NumwantPeers(config Config, a *Announce) (int, error) {
+	return a.numwant, nil
+}
 //
 // A problem with this algorithm is that freeriders can get around limits by always
 // snatching more torrents. An improvement would count only torrents you are seeding,
