@@ -9,12 +9,10 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/jackpal/bencode-go"
-	"github.com/joho/godotenv"
 )
 
 type Request struct {
@@ -64,39 +62,7 @@ func formatRequest(request Request) string {
 		request.left)
 }
 
-var defaultAlgorithm = peersToGive
-
-func buildTestConfig(algorithm PeeringAlgorithm) Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
-		log.Fatal("DATABASE_URL not set in environment")
-	}
-	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
-		log.Fatal("PGDATABASE not set in environment")
-	}
-
-	dbpool, err := DbConnect(os.Getenv("PGDATABASE") + "_test")
-	if err != nil {
-		log.Fatalf("Unable to connect to DB: %v", err)
-	}
-
-	for _, v := range allowedInfoHashes {
-		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")
-		if err != nil {
-			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
-		}
-	}
-
-	config := Config{
-		algorithm: algorithm,
-		dbpool:    dbpool,
-	}
-
-	return config
-}
+var defaultAlgorithm = PeersForAnnounces
 
 func teardownTest(config Config) {
 	_, err := config.dbpool.Exec(context.Background(), "DROP TABLE peers;")

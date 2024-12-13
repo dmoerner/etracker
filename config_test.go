@@ -1,21 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
-type PeeringAlgorithm func(config Config, a *Announce) (int, error)
-
-type Config struct {
-	dbpool    *pgxpool.Pool
-	algorithm PeeringAlgorithm
-}
-
-func BuildConfig() Config {
+func buildTestConfig(algorithm PeeringAlgorithm) Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -27,11 +20,16 @@ func BuildConfig() Config {
 		log.Fatal("PGDATABASE not set in environment")
 	}
 
-	algorithm := PeersForAnnounces
-
-	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
+	dbpool, err := DbConnect(os.Getenv("PGDATABASE") + "_test")
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
+	}
+
+	for _, v := range allowedInfoHashes {
+		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")
+		if err != nil {
+			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
+		}
 	}
 
 	config := Config{
