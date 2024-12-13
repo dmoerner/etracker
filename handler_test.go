@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackpal/bencode-go"
 	"github.com/joho/godotenv"
 )
@@ -65,7 +64,9 @@ func formatRequest(request Request) string {
 		request.left)
 }
 
-func setupTestDB() *pgxpool.Pool {
+var defaultAlgorithm = peersToGive
+
+func buildTestConfig(algorithm PeeringAlgorithm) Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -77,10 +78,9 @@ func setupTestDB() *pgxpool.Pool {
 		log.Fatal("PGDATABASE not set in environment")
 	}
 
-	testdb := os.Getenv("PGDATABASE") + "_test"
-	dbpool, err := DbConnect(testdb)
+	dbpool, err := DbConnect(os.Getenv("PGDATABASE") + "_test")
 	if err != nil {
-		log.Fatalf("Unable to connect to dest db: %v", err)
+		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
 	for _, v := range allowedInfoHashes {
@@ -90,24 +90,29 @@ func setupTestDB() *pgxpool.Pool {
 		}
 	}
 
-	return dbpool
+	config := Config{
+		algorithm: algorithm,
+		dbpool:    dbpool,
+	}
+
+	return config
 }
 
-func teardownTestDB(dbpool *pgxpool.Pool) {
-	_, err := dbpool.Exec(context.Background(), "DROP TABLE peers;")
+func teardownTest(config Config) {
+	_, err := config.dbpool.Exec(context.Background(), "DROP TABLE peers;")
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
-	_, err = dbpool.Exec(context.Background(), "DROP TABLE infohash_allowlist;")
+	_, err = config.dbpool.Exec(context.Background(), "DROP TABLE infohash_allowlist;")
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 
-	dbpool.Close()
+	config.dbpool.Close()
 }
 
 func TestPoorSeeder(t *testing.T) {
-	dbpool := setupTestDB()
+	config := buildTestConfig(defaultAlgorithm)
 
 	requests := []Request{
 		{
@@ -150,7 +155,7 @@ func TestPoorSeeder(t *testing.T) {
 
 	var dummyRequests []DummyRequest
 
-	handler := PeerHandler(dbpool)
+	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
@@ -180,11 +185,11 @@ func TestPoorSeeder(t *testing.T) {
 		t.Errorf("expected %d peers, received %d", numToGive, numRec)
 	}
 
-	teardownTestDB(dbpool)
+	teardownTest(config)
 }
 
 func TestPeerList(t *testing.T) {
-	dbpool := setupTestDB()
+	config := buildTestConfig(defaultAlgorithm)
 
 	requests := []Request{
 		{
@@ -209,7 +214,7 @@ func TestPeerList(t *testing.T) {
 
 	var dummyRequests []DummyRequest
 
-	handler := PeerHandler(dbpool)
+	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
@@ -234,11 +239,11 @@ func TestPeerList(t *testing.T) {
 		t.Errorf("expected %d peers, received %d", requests[lastIndex].numwant, numRec)
 	}
 
-	teardownTestDB(dbpool)
+	teardownTest(config)
 }
 
 func TestDenylistInfoHash(t *testing.T) {
-	dbpool := setupTestDB()
+	config := buildTestConfig(defaultAlgorithm)
 
 	request := Request{
 		peer_id:   peerids[1],
@@ -249,7 +254,7 @@ func TestDenylistInfoHash(t *testing.T) {
 	req := httptest.NewRequest("GET", formatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(dbpool)
+	handler := PeerHandler(config)
 
 	handler(w, req)
 
@@ -263,11 +268,11 @@ func TestDenylistInfoHash(t *testing.T) {
 		t.Errorf("did not error properly with non-allowlisted announce")
 	}
 
-	teardownTestDB(dbpool)
+	teardownTest(config)
 }
 
 func TestAnnounceWrite(t *testing.T) {
-	dbpool := setupTestDB()
+	config := buildTestConfig(defaultAlgorithm)
 
 	request := Request{
 		peer_id:   peerids[1],
@@ -278,7 +283,7 @@ func TestAnnounceWrite(t *testing.T) {
 	req := httptest.NewRequest("GET", formatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(dbpool)
+	handler := PeerHandler(config)
 
 	handler(w, req)
 
@@ -287,7 +292,7 @@ func TestAnnounceWrite(t *testing.T) {
 	var info_hash []byte
 	var last_announce time.Time
 
-	err := dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
+	err := config.dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}
@@ -313,5 +318,5 @@ func TestAnnounceWrite(t *testing.T) {
 		t.Error("last_announce outside one second delta from present")
 	}
 
-	teardownTestDB(dbpool)
+	teardownTest(config)
 }

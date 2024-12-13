@@ -13,7 +13,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const interval = "60 minutes"
@@ -108,9 +107,9 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 var ErrInfoHashNotAllowed = errors.New("info_hash not in infohash_allowlist")
 
 // writeAnnounce updates the peers table with an announce.
-func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
+func writeAnnounce(config Config, announce *Announce) error {
 	var b bool
-	err := dbpool.QueryRow(context.Background(),
+	err := config.dbpool.QueryRow(context.Background(),
 		"select exists (select from infohash_allowlist where info_hash = $1);", announce.info_hash).Scan(&b)
 	if err != nil {
 		return fmt.Errorf("error checking infohash_allowlist: %w", err)
@@ -119,7 +118,7 @@ func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
 		return ErrInfoHashNotAllowed
 	}
 
-	_, err = dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
 		VALUES ($1, $2, $3) 
 		ON CONFLICT (peer_id, info_hash) 
 		DO UPDATE SET ip_port = $2;`,
@@ -143,9 +142,9 @@ func writeAnnounce(dbpool *pgxpool.Pool, announce *Announce) error {
 // PostgreSQL doesn't substitute inside of string literals, so to use a variable
 // for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
 // https://github.com/jackc/pgx/issues/1043
-func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
+func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
 	query := fmt.Sprintf(`SELECT ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
-	rows, err := dbpool.Query(context.Background(), query, a.info_hash, a.peer_id)
+	rows, err := config.dbpool.Query(context.Background(), query, a.info_hash, a.peer_id)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)
 	}
@@ -156,7 +155,7 @@ func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 		return fmt.Errorf("error collecting rows: %w", err)
 	}
 
-	numToGive, err := peersToGive(dbpool, a)
+	numToGive, err := config.algorithm(config, a)
 	if err != nil {
 		return fmt.Errorf("error calculating number of peers to give: %w", err)
 	}
@@ -182,10 +181,10 @@ func sendReply(dbpool *pgxpool.Pool, w http.ResponseWriter, a *Announce) error {
 // A problem with this algorithm is that freeriders can get around limits by always
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
-func peersToGive(dbpool *pgxpool.Pool, a *Announce) (int, error) {
+func peersToGive(config Config, a *Announce) (int, error) {
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
 	var torrentCount int
-	err := dbpool.QueryRow(context.Background(), query, a.peer_id).Scan(&torrentCount)
+	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining seed count: %w", err)
 	}
@@ -206,7 +205,7 @@ func peersToGive(dbpool *pgxpool.Pool, a *Announce) (int, error) {
 // PeerHandler encapsulates the handling of each peer request. The first step
 // is to update the peers table with the information in the announce. The
 // second step is to send a bencoded reply.
-func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Request) {
+func PeerHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Skip favicon requests and anything else.
 		if r.URL.Path != "/" {
@@ -223,7 +222,7 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		err = writeAnnounce(dbpool, announce)
+		err = writeAnnounce(config, announce)
 		if err != nil {
 
 			reason := "tracker error"
@@ -241,7 +240,7 @@ func PeerHandler(dbpool *pgxpool.Pool) func(w http.ResponseWriter, r *http.Reque
 
 		}
 
-		err = sendReply(dbpool, w, announce)
+		err = sendReply(config, w, announce)
 		if err != nil {
 			log.Printf("Error responding to peer: %v", err)
 		}
