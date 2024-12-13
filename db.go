@@ -22,11 +22,13 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	}
 
 	// cf. https://x-team.com/blog/automatic-timestamps-with-postgresql
+	// "left" is a reserved word so we use amount_left.
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
 			peer_id BYTEA NOT NULL,
 			ip_port BYTEA NOT NULL,
 			info_hash BYTEA NOT NULL,
+			amount_left INTEGER NOT NULL,
 			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			PRIMARY KEY (peer_id, info_hash)
 		);

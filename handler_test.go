@@ -37,6 +37,7 @@ var peerids = map[int]string{
 	2: "-TR4060-111111111112",
 	3: "-TR4060-111111111113",
 	4: "-TR4060-111111111114",
+	5: "-TR4060-111111111115",
 }
 
 var allowedInfoHashes = map[string]string{
@@ -77,8 +78,108 @@ func teardownTest(config Config) {
 	config.dbpool.Close()
 }
 
-func TestPoorSeeder(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm)
+// TODO: Refactor these tests to not rely on fragile indexing into a slice.
+func TestPeersForSeeds(t *testing.T) {
+	config := buildTestConfig(PeersForSeeds)
+
+	// Setup: A client with three seeds requesting three peers gets three.
+	// A client with no seeds requesting three peers gets one.
+	requests := []Request{
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["a"],
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["b"],
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["c"],
+		},
+		{
+			peer_id:   peerids[3],
+			info_hash: allowedInfoHashes["d"],
+		},
+		{
+			peer_id:   peerids[4],
+			info_hash: allowedInfoHashes["d"],
+		},
+		{
+			peer_id:   peerids[5],
+			info_hash: allowedInfoHashes["d"],
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["d"],
+			left:      100,
+			numwant:   3,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["d"],
+			left:      100,
+			numwant:   3,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["b"],
+			numwant:   1,
+			left:      100,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["c"],
+			numwant:   1,
+			left:      100,
+		},
+	}
+
+	var dummyRequests []DummyRequest
+
+	handler := PeerHandler(config)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		handler(w, req)
+	}
+
+	expected := []struct {
+		name     string
+		index    int
+		expected int
+	}{
+		{"good seeder", 6, 3},
+		{"poor seeder", 7, 1},
+	}
+
+	for i := range expected {
+		resp := dummyRequests[expected[i].index].recorder.Result()
+		data, err := bencode.Decode(resp.Body)
+		if err != nil {
+			t.Errorf("failure decoding tracker response: %v", err)
+		}
+
+		// Use type assertions to extract the compacted peerlist, which
+		// uses 6 bytes per peer.
+		peersReceived := []byte(data.(map[string]any)["peers"].(string))
+		numRec := len(peersReceived) / 6
+
+		// Hardcoded for test: We expect that we should receive 1 peer because
+		// we have made announces for 1 torrent, although there are 3 peers
+		// and the peer wanted 3.
+		if numRec != expected[i].expected {
+			t.Errorf("%s expected %d peers, received %d", expected[i].name, expected[i].expected, numRec)
+		}
+	}
+
+	teardownTest(config)
+}
+
+func TestPeersForAnnounces(t *testing.T) {
+	config := buildTestConfig(PeersForAnnounces)
 
 	requests := []Request{
 		{

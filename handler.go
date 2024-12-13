@@ -18,10 +18,11 @@ import (
 const interval = "60 minutes"
 
 type Announce struct {
-	peer_id   []byte
-	ip_port   []byte
-	info_hash []byte
-	numwant   int
+	peer_id     []byte
+	ip_port     []byte
+	info_hash   []byte
+	numwant     int
+	amount_left int
 }
 
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
@@ -82,6 +83,17 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 		return nil, err
 	}
 
+	// "left" is the key in the announce, but it's a reserved word in
+	// PostgreSQL, so we will store the integer as amount_left.
+	left, err := queryHead(query["left"])
+	if err != nil {
+		return nil, err
+	}
+	amount_left, err := strconv.Atoi((string(left)))
+	if err != nil {
+		return nil, err
+	}
+
 	// We ignore errors in parsing, since we will use a default value.
 	numwantBytes, _ := queryHead(query["numwant"])
 	numwant, err := strconv.Atoi(string(numwantBytes))
@@ -100,6 +112,7 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	announce.info_hash = info_hash
 	announce.ip_port = ip_port
 	announce.numwant = numwant
+	announce.amount_left = amount_left
 
 	return &announce, nil
 }
@@ -118,11 +131,11 @@ func writeAnnounce(config Config, announce *Announce) error {
 		return ErrInfoHashNotAllowed
 	}
 
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash) 
-		VALUES ($1, $2, $3) 
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash, amount_left) 
+		VALUES ($1, $2, $3, $4) 
 		ON CONFLICT (peer_id, info_hash) 
-		DO UPDATE SET ip_port = $2;`,
-		announce.peer_id, announce.ip_port, announce.info_hash)
+		DO UPDATE SET ip_port = $2,amount_left = $4;`,
+		announce.peer_id, announce.ip_port, announce.info_hash, announce.amount_left)
 	if err != nil {
 		return fmt.Errorf("error upserting peer row: %w", err)
 	}
