@@ -10,6 +10,7 @@ func main() {
 	config := BuildConfig()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api", APIHandler(config))
 	mux.HandleFunc("/", PeerHandler(config))
 
 	s := &http.Server{

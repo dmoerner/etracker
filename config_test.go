@@ -25,6 +25,8 @@ func buildTestConfig(algorithm PeeringAlgorithm) Config {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
+	authorization := "testauthorizationkey"
+
 	for _, v := range allowedInfoHashes {
 		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")
 		if err != nil {
@@ -33,8 +35,9 @@ func buildTestConfig(algorithm PeeringAlgorithm) Config {
 	}
 
 	config := Config{
-		algorithm: algorithm,
-		dbpool:    dbpool,
+		algorithm:     algorithm,
+		authorization: authorization,
+		dbpool:        dbpool,
 	}
 
 	return config

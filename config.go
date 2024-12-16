@@ -11,8 +11,9 @@ import (
 type PeeringAlgorithm func(config Config, a *Announce) (int, error)
 
 type Config struct {
-	dbpool    *pgxpool.Pool
-	algorithm PeeringAlgorithm
+	algorithm     PeeringAlgorithm
+	authorization string
+	dbpool        *pgxpool.Pool
 }
 
 func BuildConfig() Config {
@@ -27,6 +28,14 @@ func BuildConfig() Config {
 		log.Fatal("PGDATABASE not set in environment")
 	}
 
+	// An empty authorization string in the config means the API is forbidden.
+	// It is the responsibility of clients who use this struct key to forbid this.
+	var authorization string
+	authorization, ok := os.LookupEnv("ETRACKER_AUTHORIZATION")
+	if !ok {
+		log.Print("ETRACKER_AUTHORIZATION not set in environment")
+	}
+
 	algorithm := PeersForAnnounces
 
 	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
@@ -35,8 +44,9 @@ func BuildConfig() Config {
 	}
 
 	config := Config{
-		algorithm: algorithm,
-		dbpool:    dbpool,
+		algorithm:     algorithm,
+		authorization: authorization,
+		dbpool:        dbpool,
 	}
 
 	return config
