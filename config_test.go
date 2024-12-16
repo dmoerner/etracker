@@ -8,7 +8,11 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func buildTestConfig(algorithm PeeringAlgorithm) Config {
+const defaultAPIKey = "testauthorizationkey"
+
+var defaultAlgorithm = PeersForAnnounces
+
+func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
@@ -24,8 +28,6 @@ func buildTestConfig(algorithm PeeringAlgorithm) Config {
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
-
-	authorization := "testauthorizationkey"
 
 	for _, v := range allowedInfoHashes {
 		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")

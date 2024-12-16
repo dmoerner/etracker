@@ -6,7 +6,7 @@ import (
 )
 
 func TestAuthorization(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm)
+	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
 
 	data := []struct {
 		name          string
@@ -14,7 +14,7 @@ func TestAuthorization(t *testing.T) {
 		authorization string
 		expected      int
 	}{
-		{"good api key", "http://example.com:8080/api", "testauthorizationkey", 200},
+		{"good api key", "http://example.com:8080/api", defaultAPIKey, 200},
 		{"bad api key", "http://example.com:8080/api", "badapikey", 403},
 		{"no api key", "http://example.com:8080/api", "", 400},
 	}

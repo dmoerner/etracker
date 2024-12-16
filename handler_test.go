@@ -63,8 +63,6 @@ func formatRequest(request Request) string {
 		request.left)
 }
 
-var defaultAlgorithm = PeersForAnnounces
-
 func teardownTest(config Config) {
 	_, err := config.dbpool.Exec(context.Background(), "DROP TABLE peers;")
 	if err != nil {
@@ -80,7 +78,7 @@ func teardownTest(config Config) {
 
 // TODO: Refactor these tests to not rely on fragile indexing into a slice.
 func TestPeersForSeeds(t *testing.T) {
-	config := buildTestConfig(PeersForSeeds)
+	config := buildTestConfig(PeersForSeeds, defaultAPIKey)
 
 	// Setup: A client with three seeds requesting three peers gets three.
 	// A client with no seeds requesting three peers gets one.
@@ -179,7 +177,7 @@ func TestPeersForSeeds(t *testing.T) {
 }
 
 func TestPeersForAnnounces(t *testing.T) {
-	config := buildTestConfig(PeersForAnnounces)
+	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
 
 	requests := []Request{
 		{
@@ -256,7 +254,7 @@ func TestPeersForAnnounces(t *testing.T) {
 }
 
 func TestPeerList(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm)
+	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
 
 	requests := []Request{
 		{
@@ -310,7 +308,7 @@ func TestPeerList(t *testing.T) {
 }
 
 func TestDenylistInfoHash(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm)
+	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
 
 	request := Request{
 		peer_id:   peerids[1],
@@ -339,7 +337,7 @@ func TestDenylistInfoHash(t *testing.T) {
 }
 
 func TestAnnounceWrite(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm)
+	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
 
 	request := Request{
 		peer_id:   peerids[1],
