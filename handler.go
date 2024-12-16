@@ -28,7 +28,7 @@ type Announce struct {
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
 // 6-byte compact format expected by BEP 23. The port used is extracted from
 // the client announce; the RemoteAddr port is ignored.
-func encodeAddr(remoteAddr string, port []byte) ([]byte, error) {
+func encodeAddr(remoteAddr string, port string) ([]byte, error) {
 	splitAddr := strings.Split(remoteAddr, ":")
 
 	if len(splitAddr) != 2 {
@@ -37,7 +37,7 @@ func encodeAddr(remoteAddr string, port []byte) ([]byte, error) {
 
 	ipString := splitAddr[0]
 
-	portInt, err := strconv.Atoi(string(port))
+	portInt, err := strconv.Atoi(port)
 	if err != nil {
 		return nil, fmt.Errorf("error converting port to int: %w", err)
 	}
@@ -53,14 +53,6 @@ func encodeAddr(remoteAddr string, port []byte) ([]byte, error) {
 	ip_port := append(parsedIP, bytesPort...)
 
 	return ip_port, nil
-}
-
-// queryHead confirms we have a singleton list of values and returns the head.
-func queryHead(query []string) ([]byte, error) {
-	if len(query) != 1 {
-		return []byte(""), fmt.Errorf("only one key-value pair allowed in request: %v", query)
-	}
-	return []byte(query[0]), nil
 }
 
 // parseAnnounce parses a request to construct an announce struct, and returns
@@ -89,14 +81,14 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	if err != nil {
 		return nil, err
 	}
-	amount_left, err := strconv.Atoi((string(left)))
+	amount_left, err := strconv.Atoi(left)
 	if err != nil {
 		return nil, err
 	}
 
 	// We ignore errors in parsing, since we will use a default value.
-	numwantBytes, _ := queryHead(query["numwant"])
-	numwant, err := strconv.Atoi(string(numwantBytes))
+	numwantString, _ := queryHead(query["numwant"])
+	numwant, err := strconv.Atoi(numwantString)
 	if err != nil || numwant < 0 || numwant > 100 {
 		numwant = 50
 	}
@@ -108,8 +100,8 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 
 	var announce Announce
 
-	announce.peer_id = peer_id
-	announce.info_hash = info_hash
+	announce.peer_id = []byte(peer_id)
+	announce.info_hash = []byte(info_hash)
 	announce.ip_port = ip_port
 	announce.numwant = numwant
 	announce.amount_left = amount_left
@@ -192,6 +184,7 @@ func PeerHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Skip favicon requests and anything else.
 		if r.URL.Path != "/" {
+			http.NotFound(w, r)
 			return
 		}
 
