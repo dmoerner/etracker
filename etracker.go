@@ -9,11 +9,14 @@ import (
 func main() {
 	config := BuildConfig()
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", PeerHandler(config))
+
 	s := &http.Server{
 		Addr:              ":8080",
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
-		Handler:           http.TimeoutHandler(http.HandlerFunc(PeerHandler(config)), time.Second, "Timeout"),
+		Handler:           http.TimeoutHandler(mux, time.Second, "Timeout"),
 	}
 
 	err := s.ListenAndServe()
