@@ -60,42 +60,41 @@ func encodeAddr(remoteAddr string, port string) ([]byte, error) {
 func parseAnnounce(r *http.Request) (*Announce, error) {
 	query := r.URL.Query()
 
-	peer_id, err := queryHead(query["peer_id"])
-	if err != nil {
-		return nil, err
+	peer_id := query.Get("peer_id")
+	if peer_id == "" {
+		return nil, fmt.Errorf("no peer_id in request")
 	}
 
-	info_hash, err := queryHead(query["info_hash"])
-	if err != nil {
-		return nil, err
+	info_hash := query.Get("info_hash")
+	if info_hash == "" {
+		return nil, fmt.Errorf("no info_hash in request")
 	}
 
-	port, err := queryHead(query["port"])
+	port := query.Get("port")
+	if port == "" {
+		return nil, fmt.Errorf("no port in request")
+	}
+	ip_port, err := encodeAddr(r.RemoteAddr, port)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error encoding remote address: %w", err)
 	}
 
 	// "left" is the key in the announce, but it's a reserved word in
 	// PostgreSQL, so we will store the integer as amount_left.
-	left, err := queryHead(query["left"])
-	if err != nil {
-		return nil, err
+	left := query.Get("left")
+	if left == "" {
+		return nil, fmt.Errorf("no left in request")
 	}
 	amount_left, err := strconv.Atoi(left)
 	if err != nil {
 		return nil, err
 	}
 
-	// We ignore errors in parsing, since we will use a default value.
-	numwantString, _ := queryHead(query["numwant"])
+	// numwant is optional
+	numwantString := query.Get("numwant")
 	numwant, err := strconv.Atoi(numwantString)
 	if err != nil || numwant < 0 || numwant > 100 {
 		numwant = 50
-	}
-
-	ip_port, err := encodeAddr(r.RemoteAddr, port)
-	if err != nil {
-		return nil, fmt.Errorf("error encoding remote address: %w", err)
 	}
 
 	var announce Announce

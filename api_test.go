@@ -20,7 +20,7 @@ func TestUnsetAuthorization(t *testing.T) {
 	}{
 		{"normally good api key", "http://example.com:8080/api", defaultAPIKey, 403},
 		{"bad api key", "http://example.com:8080/api", "badapikey", 403},
-		{"no api key", "http://example.com:8080/api", "", 403},
+		{"no api key", "http://example.com:8080/api", "", 400},
 	}
 
 	handler := APIHandler(config)

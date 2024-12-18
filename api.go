@@ -7,10 +7,10 @@ import "net/http"
 // an environment variable.
 func APIHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verify authorization. An empty authorization string in the
-		// config means API access is forbidden.
-		authorization, err := queryHead(r.Header["Authorization"])
-		if err != nil {
+		// Verify authorization. An empty authorization value or no key
+		// in the config means API access is forbidden.
+		authorization := r.Header.Get("Authorization")
+		if authorization == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
