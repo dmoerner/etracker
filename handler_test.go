@@ -79,6 +79,7 @@ func teardownTest(config Config) {
 // TODO: Refactor these tests to not rely on fragile indexing into a slice.
 func TestPeersForSeeds(t *testing.T) {
 	config := buildTestConfig(PeersForSeeds, defaultAPIKey)
+	defer teardownTest(config)
 
 	// Setup: A client with three seeds requesting three peers gets three.
 	// A client with no seeds requesting three peers gets one.
@@ -172,12 +173,11 @@ func TestPeersForSeeds(t *testing.T) {
 			t.Errorf("%s expected %d peers, received %d", expected[i].name, expected[i].expected, numRec)
 		}
 	}
-
-	teardownTest(config)
 }
 
 func TestPeersForAnnounces(t *testing.T) {
 	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
+	defer teardownTest(config)
 
 	requests := []Request{
 		{
@@ -249,12 +249,11 @@ func TestPeersForAnnounces(t *testing.T) {
 	if numRec != numToGive {
 		t.Errorf("expected %d peers, received %d", numToGive, numRec)
 	}
-
-	teardownTest(config)
 }
 
 func TestPeerList(t *testing.T) {
 	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	defer teardownTest(config)
 
 	requests := []Request{
 		{
@@ -303,12 +302,11 @@ func TestPeerList(t *testing.T) {
 	if numRec != requests[lastIndex].numwant {
 		t.Errorf("expected %d peers, received %d", requests[lastIndex].numwant, numRec)
 	}
-
-	teardownTest(config)
 }
 
 func TestDenylistInfoHash(t *testing.T) {
 	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	defer teardownTest(config)
 
 	request := Request{
 		peer_id:   peerids[1],
@@ -332,12 +330,11 @@ func TestDenylistInfoHash(t *testing.T) {
 	if data.(map[string]any)["failure reason"].(string) != "info_hash not in the allowed list" {
 		t.Errorf("did not error properly with non-allowlisted announce")
 	}
-
-	teardownTest(config)
 }
 
 func TestAnnounceWrite(t *testing.T) {
 	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	defer teardownTest(config)
 
 	request := Request{
 		peer_id:   peerids[1],
@@ -382,6 +379,4 @@ func TestAnnounceWrite(t *testing.T) {
 	if !last_announce.Before(time.Now()) || !last_announce.After(time.Now().Add(-time.Second)) {
 		t.Error("last_announce outside one second delta from present")
 	}
-
-	teardownTest(config)
 }
