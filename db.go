@@ -29,6 +29,8 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 			ip_port BYTEA NOT NULL,
 			info_hash BYTEA NOT NULL,
 			amount_left INTEGER NOT NULL,
+			downloaded INTEGER NOT NULL,
+			uploaded INTEGER NOT NULL,
 			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			PRIMARY KEY (peer_id, info_hash)
 		);

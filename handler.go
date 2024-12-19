@@ -23,6 +23,8 @@ type Announce struct {
 	info_hash   []byte
 	numwant     int
 	amount_left int
+	downloaded  int
+	uploaded    int
 }
 
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
@@ -90,6 +92,24 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 		return nil, err
 	}
 
+	uploadedASCII := query.Get("uploaded")
+	if uploadedASCII == "" {
+		return nil, fmt.Errorf("no uploaded in request")
+	}
+	uploaded, err := strconv.Atoi(uploadedASCII)
+	if err != nil {
+		return nil, err
+	}
+
+	downloadedASCII := query.Get("downloaded")
+	if downloadedASCII == "" {
+		return nil, fmt.Errorf("no downloaded in request")
+	}
+	downloaded, err := strconv.Atoi(downloadedASCII)
+	if err != nil {
+		return nil, err
+	}
+
 	// numwant is optional
 	numwantString := query.Get("numwant")
 	numwant, err := strconv.Atoi(numwantString)
@@ -104,6 +124,8 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	announce.ip_port = ip_port
 	announce.numwant = numwant
 	announce.amount_left = amount_left
+	announce.downloaded = downloaded
+	announce.uploaded = uploaded
 
 	return &announce, nil
 }
@@ -122,11 +144,11 @@ func writeAnnounce(config Config, announce *Announce) error {
 		return ErrInfoHashNotAllowed
 	}
 
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, ip_port, info_hash, amount_left) 
-		VALUES ($1, $2, $3, $4) 
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, info_hash, ip_port, amount_left, uploaded, downloaded) 
+		VALUES ($1, $2, $3, $4, $5, $6) 
 		ON CONFLICT (peer_id, info_hash) 
-		DO UPDATE SET ip_port = $2,amount_left = $4;`,
-		announce.peer_id, announce.ip_port, announce.info_hash, announce.amount_left)
+		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6;`,
+		announce.peer_id, announce.info_hash, announce.ip_port, announce.amount_left, announce.uploaded, announce.downloaded)
 	if err != nil {
 		return fmt.Errorf("error upserting peer row: %w", err)
 	}
