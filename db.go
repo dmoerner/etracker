@@ -31,6 +31,7 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 			amount_left INTEGER NOT NULL,
 			downloaded INTEGER NOT NULL,
 			uploaded INTEGER NOT NULL,
+			event INTEGER,
 			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			PRIMARY KEY (peer_id, info_hash)
 		);

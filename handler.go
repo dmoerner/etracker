@@ -17,6 +17,15 @@ import (
 
 const interval = "60 minutes"
 
+type Event int
+
+const (
+	_ Event = iota
+	started
+	stopped
+	completed
+)
+
 type Announce struct {
 	peer_id     []byte
 	ip_port     []byte
@@ -25,6 +34,7 @@ type Announce struct {
 	amount_left int
 	downloaded  int
 	uploaded    int
+	event       Event
 }
 
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
@@ -117,6 +127,18 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 		numwant = 50
 	}
 
+	// event is optional, but if present must be "started", "stopped", or "completed"
+	var event Event
+	eventString := query.Get("event")
+	switch eventString {
+	case "started":
+		event = started
+	case "stopped":
+		event = stopped
+	case "completed":
+		event = completed
+	}
+
 	var announce Announce
 
 	announce.peer_id = []byte(peer_id)
@@ -126,6 +148,7 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	announce.amount_left = amount_left
 	announce.downloaded = downloaded
 	announce.uploaded = uploaded
+	announce.event = event
 
 	return &announce, nil
 }
@@ -144,11 +167,11 @@ func writeAnnounce(config Config, announce *Announce) error {
 		return ErrInfoHashNotAllowed
 	}
 
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, info_hash, ip_port, amount_left, uploaded, downloaded) 
-		VALUES ($1, $2, $3, $4, $5, $6) 
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, info_hash, ip_port, amount_left, uploaded, downloaded, event) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7) 
 		ON CONFLICT (peer_id, info_hash) 
-		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6;`,
-		announce.peer_id, announce.info_hash, announce.ip_port, announce.amount_left, announce.uploaded, announce.downloaded)
+		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6, event = $7;`,
+		announce.peer_id, announce.info_hash, announce.ip_port, announce.amount_left, announce.uploaded, announce.downloaded, announce.event)
 	if err != nil {
 		return fmt.Errorf("error upserting peer row: %w", err)
 	}
@@ -169,8 +192,8 @@ func writeAnnounce(config Config, announce *Announce) error {
 // for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
 // https://github.com/jackc/pgx/issues/1043
 func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
-	query := fmt.Sprintf(`SELECT ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
-	rows, err := config.dbpool.Query(context.Background(), query, a.info_hash, a.peer_id)
+	query := fmt.Sprintf(`SELECT ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3;`, interval)
+	rows, err := config.dbpool.Query(context.Background(), query, a.info_hash, a.peer_id, stopped)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)
 	}

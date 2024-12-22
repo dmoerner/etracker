@@ -24,7 +24,7 @@ type Request struct {
 	uploaded   int
 	downloaded int
 	left       int
-	event      *string
+	event      Event
 }
 
 type DummyRequest struct {
@@ -52,7 +52,7 @@ const (
 )
 
 func formatRequest(request Request) string {
-	return fmt.Sprintf(
+	announce := fmt.Sprintf(
 		"http://example.com/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
 		request.peer_id,
 		request.info_hash,
@@ -61,6 +61,22 @@ func formatRequest(request Request) string {
 		request.uploaded,
 		request.downloaded,
 		request.left)
+
+	var event string
+	switch request.event {
+	case stopped:
+		event = "stopped"
+	case started:
+		event = "started"
+	case completed:
+		event = "completed"
+	}
+
+	if event != "" {
+		announce += fmt.Sprintf("&event=%s", event)
+	}
+
+	return announce
 }
 
 func teardownTest(config Config) {
@@ -172,6 +188,65 @@ func TestPeersForSeeds(t *testing.T) {
 		if numRec != expected[i].expected {
 			t.Errorf("%s expected %d peers, received %d", expected[i].name, expected[i].expected, numRec)
 		}
+	}
+}
+
+func TestStopped(t *testing.T) {
+	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
+	defer teardownTest(config)
+
+	requests := []Request{
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["a"],
+			port:      6881,
+			numwant:   1,
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["a"],
+			port:      6881,
+			numwant:   1,
+			event:     stopped,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["a"],
+			port:      6881,
+			numwant:   1,
+		},
+	}
+
+	var dummyRequests []DummyRequest
+
+	handler := PeerHandler(config)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		handler(w, req)
+	}
+
+	lastIndex := len(dummyRequests) - 1
+
+	resp := dummyRequests[lastIndex].recorder.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	// Use type assertions to extract the compacted peerlist, which
+	// uses 6 bytes per peer.
+	peersReceived := []byte(data.(map[string]any)["peers"].(string))
+	numRec := len(peersReceived) / 6
+
+	// Hardcoded for test: We expect that we should receive 0 peers despite
+	// wanting one, because the only peer in the swarm announces that
+	// they have stopped.
+	numToGive := 0
+	if numRec != numToGive {
+		t.Errorf("expected %d peers, received %d", numToGive, numRec)
 	}
 }
 

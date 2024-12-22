@@ -20,9 +20,9 @@ func NumwantPeers(config Config, a *Announce) (int, error) {
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
 func PeersForAnnounces(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
 	var torrentCount int
-	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id).Scan(&torrentCount)
+	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining announce count: %w", err)
 	}
@@ -48,9 +48,9 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 // TODO: Implement better normalization than this simple linear algorithm which
 // gives at least one peer.
 func PeersForSeeds(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s';`, interval)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
 	var torrentCount int
-	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id).Scan(&torrentCount)
+	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining seed count: %w", err)
 	}
