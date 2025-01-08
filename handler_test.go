@@ -250,6 +250,87 @@ func TestStopped(t *testing.T) {
 	}
 }
 
+func TestPeersForGoodSeeds(t *testing.T) {
+	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
+	defer teardownTest(config)
+
+	// Peer 1 is seeding two torrents, but both with ratio > 1,
+	// so can receive all 4 peers.
+	requests := []Request{
+		{
+			peer_id:    peerids[1],
+			info_hash:  allowedInfoHashes["a"],
+			port:       6881,
+			uploaded:   2,
+			downloaded: 1,
+		},
+		{
+			peer_id:    peerids[1],
+			info_hash:  allowedInfoHashes["b"],
+			port:       6881,
+			uploaded:   2,
+			downloaded: 1,
+		},
+		{
+			peer_id:   peerids[2],
+			info_hash: allowedInfoHashes["d"],
+			port:      6881,
+		},
+		{
+			peer_id:   peerids[3],
+			info_hash: allowedInfoHashes["d"],
+			port:      6883,
+		},
+		{
+			peer_id:   peerids[4],
+			info_hash: allowedInfoHashes["d"],
+			port:      6883,
+		},
+		{
+			peer_id:   peerids[5],
+			info_hash: allowedInfoHashes["d"],
+			port:      6883,
+		},
+		{
+			peer_id:   peerids[1],
+			info_hash: allowedInfoHashes["d"],
+			port:      6881,
+			numwant:   10,
+		},
+	}
+
+	var dummyRequests []DummyRequest
+
+	handler := PeerHandler(config)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		handler(w, req)
+	}
+
+	lastIndex := len(dummyRequests) - 1
+
+	resp := dummyRequests[lastIndex].recorder.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	// Use type assertions to extract the compacted peerlist, which
+	// uses 6 bytes per peer.
+	peersReceived := []byte(data.(map[string]any)["peers"].(string))
+	numRec := len(peersReceived) / 6
+
+	// Hardcoded for test: We expect that we should receive 4 peers because
+	// we are seeding 2 torrents and both have a positive ratio.
+	numToGive := 4
+	if numRec != numToGive {
+		t.Errorf("expected %d peers, received %d", numToGive, numRec)
+	}
+}
+
 func TestPeersForAnnounces(t *testing.T) {
 	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
 	defer teardownTest(config)
