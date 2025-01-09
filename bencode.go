@@ -10,7 +10,10 @@ import (
 	"log"
 )
 
-const Interval = "1800" // 30 minutes
+const (
+	Interval     = "2700" // 45 minutes
+	Min_Interval = "30"   // 30 seconds
+)
 
 // FailureReason generates a bencoded failure reason from a string.
 // According to BEP 3, this should be the only key included on an error.
@@ -28,9 +31,11 @@ func FailureReason(msg string) []byte {
 func PeerList(peers [][]byte) []byte {
 	joinedPeers := bytes.Join(peers, []byte(""))
 	var bencoded bytes.Buffer
-	_, err := fmt.Fprintf(&bencoded, "d8:interval%d:%s5:peers%d:%se",
+	_, err := fmt.Fprintf(&bencoded, "d8:interval%d:%s12:min interval%d:%s5:peers%d:%se",
 		len(Interval),
 		Interval,
+		len(Min_Interval),
+		Min_Interval,
 		len(joinedPeers),
 		joinedPeers)
 	if err != nil {

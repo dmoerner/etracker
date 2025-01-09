@@ -32,8 +32,9 @@ func TestFail(t *testing.T) {
 // reflection to bencode arbitrary data structures.
 func reflectExpected(peers [][]byte) []byte {
 	expectedMap := map[string]string{
-		"interval": "1800",
-		"peers":    string(bytes.Join(peers, []byte(""))),
+		"interval":     "2700",
+		"min interval": "30",
+		"peers":        string(bytes.Join(peers, []byte(""))),
 	}
 	var expected bytes.Buffer
 	err := bencode.Marshal(&expected, expectedMap)
