@@ -42,7 +42,8 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// statistics to detect cheaters.
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peerids (
-			peer_id BYTEA NOT NULL PRIMARY KEY
+			peer_id BYTEA NOT NULL PRIMARY KEY,
+			peer_max_upload INTEGER DEFAULT 0 NOT NULL
 		);
 		`)
 	if err != nil {

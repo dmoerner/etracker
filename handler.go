@@ -171,8 +171,21 @@ func checkInfoHash(config Config, announce *Announce) error {
 
 // writeAnnounce updates the peers table with an announce.
 func writeAnnounce(config Config, announce *Announce) error {
-	// Update peerids table
-	_, err := config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id) VALUES ($1) ON CONFLICT DO NOTHING`, announce.peer_id)
+	// Calculate most recent upload change.
+	var last_uploaded int
+	var upload_change int
+	err := config.dbpool.QueryRow(context.Background(), `SELECT uploaded FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND event <> $3 ORDER BY last_announce DESC LIMIT 1;`, announce.info_hash, announce.peer_id, stopped).Scan(&last_uploaded)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			upload_change = 0
+		} else {
+			return fmt.Errorf("error fetching recent announces: %w", err)
+		}
+	}
+	upload_change = announce.uploaded - last_uploaded
+
+	// Update peerids table, setting a new peer_max_upload
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id, peer_max_upload) VALUES ($1, $2) ON CONFLICT (peer_id) DO UPDATE SET peer_max_upload = GREATEST(peerids.peer_max_upload, $2);`, announce.peer_id, upload_change)
 	if err != nil {
 		return fmt.Errorf("error inserting peer_id: %w", err)
 	}
