@@ -36,7 +36,7 @@ func TestTables(t *testing.T) {
 		log.Fatalf("%v", err)
 	}
 
-	tables := []string{"peers", "infohashes"}
+	tables := []string{"peers", "infohashes", "peerids"}
 
 	for _, table := range tables {
 		ok, err := tableExists(dbpool, table)

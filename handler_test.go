@@ -92,6 +92,34 @@ func teardownTest(config Config) {
 	config.dbpool.Close()
 }
 
+func TestDownloadedIncrement(t *testing.T) {
+	config := buildTestConfig(PeersForSeeds, defaultAPIKey)
+	defer teardownTest(config)
+
+	request := Request{
+		peer_id:   peerids[1],
+		info_hash: allowedInfoHashes["a"],
+		event:     completed,
+	}
+
+	handler := PeerHandler(config)
+
+	req := httptest.NewRequest("GET", formatRequest(request), nil)
+	w := httptest.NewRecorder()
+	handler(w, req)
+
+	var downloaded int
+
+	err := config.dbpool.QueryRow(context.Background(), "SELECT downloaded FROM infohashes where info_hash = $1;", request.info_hash).Scan(&downloaded)
+	if err != nil {
+		t.Fatalf("error querying test db: %v", err)
+	}
+
+	if downloaded != 1 {
+		t.Errorf("expected %d downloads for info_hash %v, got %d", 1, request.info_hash, downloaded)
+	}
+}
+
 // TODO: Refactor these tests to not rely on fragile indexing into a slice.
 func TestPeersForSeeds(t *testing.T) {
 	config := buildTestConfig(PeersForSeeds, defaultAPIKey)

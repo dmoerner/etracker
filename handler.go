@@ -167,6 +167,18 @@ func writeAnnounce(config Config, announce *Announce) error {
 		return ErrInfoHashNotAllowed
 	}
 
+	// Update peerids table
+	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id) VALUES ($1) ON CONFLICT DO NOTHING`, announce.peer_id)
+	if err != nil {
+		return fmt.Errorf("error inserting peer_id: %w", err)
+	}
+
+	// Update infohashes table on completed event.
+	if announce.event == completed {
+		_, err = config.dbpool.Exec(context.Background(), `UPDATE infohashes SET downloaded = downloaded + 1 where info_hash = $1`, announce.info_hash)
+	}
+
+	// Update peers table
 	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id, info_hash, ip_port, amount_left, uploaded, downloaded, event) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7) 
 		ON CONFLICT (peer_id, info_hash) 

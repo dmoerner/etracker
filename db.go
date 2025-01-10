@@ -37,13 +37,25 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
 	}
 
+	// peerids table. Includes stored score for each peer used to calculate
+	// peer quality, and will in the future be extended to include
+	// statistics to detect cheaters.
+	_, err = dbpool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS peerids (
+			peer_id BYTEA NOT NULL PRIMARY KEY
+		);
+		`)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create peerids table: %w", err)
+	}
+
 	// peers table, which includes information from announces.
 	// "left" is a reserved word so we use amount_left.
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
-			peer_id BYTEA NOT NULL,
+			peer_id BYTEA NOT NULL references peerids(peer_id),
 			ip_port BYTEA NOT NULL,
 			info_hash BYTEA NOT NULL references infohashes(info_hash),
 			amount_left INTEGER NOT NULL,
