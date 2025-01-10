@@ -226,12 +226,6 @@ func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
 // second step is to send a bencoded reply.
 func PeerHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Skip favicon requests and anything else.
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-
 		announce, err := parseAnnounce(r)
 		if err != nil {
 			log.Printf("Error parsing anounce: %v", err)

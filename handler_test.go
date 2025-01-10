@@ -53,7 +53,7 @@ const (
 
 func formatRequest(request Request) string {
 	announce := fmt.Sprintf(
-		"http://example.com/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
+		"http://example.com/announce/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
 		request.peer_id,
 		request.info_hash,
 		request.port,

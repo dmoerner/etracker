@@ -11,7 +11,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api", APIHandler(config))
-	mux.HandleFunc("/", PeerHandler(config))
+	mux.HandleFunc("/announce", PeerHandler(config))
 
 	s := &http.Server{
 		Addr:              ":8080",
