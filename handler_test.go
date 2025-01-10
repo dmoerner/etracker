@@ -84,7 +84,7 @@ func teardownTest(config Config) {
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
-	_, err = config.dbpool.Exec(context.Background(), "DROP TABLE infohash_allowlist;")
+	_, err = config.dbpool.Exec(context.Background(), "DROP TABLE infohashes;")
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}

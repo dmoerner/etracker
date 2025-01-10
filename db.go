@@ -56,14 +56,20 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to create peers table: %w", err)
 	}
 
+	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
+	// and an optional name, which should match the "name" section in the info
+	// section of the torrent file (for use in /scrape and searching), and
+	// an optional license (for verification, moderation, and search).
 	_, err = dbpool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS infohash_allowlist (
+		CREATE TABLE IF NOT EXISTS infohashes (
 			info_hash BYTEA NOT NULL PRIMARY KEY,
-			note TEXT
+			downloaded INTEGER DEFAULT 0 NOT NULL,
+			name TEXT,
+			license TEXT
 		);
 		`)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create infohash_allowlist table: %w", err)
+		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
 	}
 
 	return dbpool, nil

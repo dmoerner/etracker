@@ -30,7 +30,7 @@ func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 	}
 
 	for _, v := range allowedInfoHashes {
-		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohash_allowlist (info_hash, note) VALUES ($1, $2);`, v, "test allowed infohash")
+		_, err = dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash) VALUES ($1);`, v)
 		if err != nil {
 			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
 		}

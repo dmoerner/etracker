@@ -153,15 +153,15 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 	return &announce, nil
 }
 
-var ErrInfoHashNotAllowed = errors.New("info_hash not in infohash_allowlist")
+var ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
 
 // writeAnnounce updates the peers table with an announce.
 func writeAnnounce(config Config, announce *Announce) error {
 	var b bool
 	err := config.dbpool.QueryRow(context.Background(),
-		"select exists (select from infohash_allowlist where info_hash = $1);", announce.info_hash).Scan(&b)
+		"select exists (select from infohashes where info_hash = $1);", announce.info_hash).Scan(&b)
 	if err != nil {
-		return fmt.Errorf("error checking infohash_allowlist: %w", err)
+		return fmt.Errorf("error checking infohashes: %w", err)
 	}
 	if !b {
 		return ErrInfoHashNotAllowed
