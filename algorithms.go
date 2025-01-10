@@ -32,9 +32,8 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 	if torrentCount >= a.numwant {
 		numToGive = a.numwant
 	} else {
-		// Since this algorithm counts the present announce by this client, every client
-		// is guaranteed to get at least one peer.
-		numToGive = torrentCount
+		// Make sure even new peers get at least one peer.
+		numToGive = torrentCount + 1
 	}
 
 	return numToGive, nil
@@ -120,7 +119,7 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 
 	// New peers always get at least one other peer. This totalCount test
 	// is required to prevent division by zero.
-	if totalCount <= 1 || seededCount == 0 {
+	if totalCount == 1 || seededCount == 0 {
 		return 1, nil
 	}
 
@@ -130,7 +129,7 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 	//
 	// This still does not reward clients which are mostly
 	// partial seeding.
-	numToGive := seededCount * (1 + posRatio/(totalCount-1))
+	numToGive := seededCount * (1 + posRatio/totalCount)
 
 	if numToGive >= a.numwant {
 		numToGive = a.numwant

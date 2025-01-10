@@ -155,8 +155,8 @@ func parseAnnounce(r *http.Request) (*Announce, error) {
 
 var ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
 
-// writeAnnounce updates the peers table with an announce.
-func writeAnnounce(config Config, announce *Announce) error {
+// checkInfoHash verifies that an announce is on the allowlist.
+func checkInfoHash(config Config, announce *Announce) error {
 	var b bool
 	err := config.dbpool.QueryRow(context.Background(),
 		"select exists (select from infohashes where info_hash = $1);", announce.info_hash).Scan(&b)
@@ -166,9 +166,13 @@ func writeAnnounce(config Config, announce *Announce) error {
 	if !b {
 		return ErrInfoHashNotAllowed
 	}
+	return nil
+}
 
+// writeAnnounce updates the peers table with an announce.
+func writeAnnounce(config Config, announce *Announce) error {
 	// Update peerids table
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id) VALUES ($1) ON CONFLICT DO NOTHING`, announce.peer_id)
+	_, err := config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id) VALUES ($1) ON CONFLICT DO NOTHING`, announce.peer_id)
 	if err != nil {
 		return fmt.Errorf("error inserting peer_id: %w", err)
 	}
@@ -248,27 +252,30 @@ func PeerHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		err = checkInfoHash(config, announce)
+		if errors.Is(err, ErrInfoHashNotAllowed) {
+			_, err = w.Write(FailureReason("info_hash not in the allowed list"))
+			if err != nil {
+				log.Printf("Error responding to peer: %v", err)
+			}
+			return
+		}
+
+		err = sendReply(config, w, announce)
+		if err != nil {
+			log.Printf("Error responding to peer: %v", err)
+		}
+
 		err = writeAnnounce(config, announce)
 		if err != nil {
-
 			reason := "tracker error"
-			if errors.Is(err, ErrInfoHashNotAllowed) {
-				log.Printf("Not allowed info_hash: %s", announce.info_hash)
-				reason = "info_hash not in the allowed list"
-			} else {
-				log.Printf("Error writing announce to db: %v", err)
-			}
+			log.Printf("Error writing announce to db: %v", err)
 			_, err = w.Write(FailureReason(reason))
 			if err != nil {
 				log.Printf("Error responding to peer: %v", err)
 			}
 			return
 
-		}
-
-		err = sendReply(config, w, announce)
-		if err != nil {
-			log.Printf("Error responding to peer: %v", err)
 		}
 	}
 }
