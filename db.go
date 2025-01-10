@@ -21,13 +21,31 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to connect to db: %w", err)
 	}
 
-	// cf. https://x-team.com/blog/automatic-timestamps-with-postgresql
+	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
+	// and an optional name, which should match the "name" section in the info
+	// section of the torrent file (for use in /scrape and searching), and
+	// an optional license (for verification, moderation, and search).
+	_, err = dbpool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS infohashes (
+			info_hash BYTEA NOT NULL PRIMARY KEY,
+			downloaded INTEGER DEFAULT 0 NOT NULL,
+			name TEXT,
+			license TEXT
+		);
+		`)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
+	}
+
+	// peers table, which includes information from announces.
 	// "left" is a reserved word so we use amount_left.
+	// For information on the triggers to keep track of announce times, see
+	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
 			peer_id BYTEA NOT NULL,
 			ip_port BYTEA NOT NULL,
-			info_hash BYTEA NOT NULL,
+			info_hash BYTEA NOT NULL references infohashes(info_hash),
 			amount_left INTEGER NOT NULL,
 			downloaded INTEGER NOT NULL,
 			uploaded INTEGER NOT NULL,
@@ -54,22 +72,6 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create peers table: %w", err)
-	}
-
-	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
-	// and an optional name, which should match the "name" section in the info
-	// section of the torrent file (for use in /scrape and searching), and
-	// an optional license (for verification, moderation, and search).
-	_, err = dbpool.Exec(ctx, `
-		CREATE TABLE IF NOT EXISTS infohashes (
-			info_hash BYTEA NOT NULL PRIMARY KEY,
-			downloaded INTEGER DEFAULT 0 NOT NULL,
-			name TEXT,
-			license TEXT
-		);
-		`)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
 	}
 
 	return dbpool, nil
