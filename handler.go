@@ -221,7 +221,7 @@ func writeAnnounce(config Config, announce *Announce) error {
 // for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
 // https://github.com/jackc/pgx/issues/1043
 func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
-	query := fmt.Sprintf(`SELECT ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3;`, interval)
+	query := fmt.Sprintf(`SELECT DISTINCT ON (peer_id) ip_port FROM peers WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3 ORDER BY peer_id, last_announce DESC;`, interval)
 	rows, err := config.dbpool.Query(context.Background(), query, a.info_hash, a.peer_id, stopped)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)
