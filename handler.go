@@ -257,7 +257,7 @@ func PeerHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		announce, err := parseAnnounce(r)
 		if err != nil {
-			log.Printf("Error parsing anounce: %v", err)
+			log.Printf("Error parsing announce: %v", err)
 			_, err = w.Write(FailureReason("error parsing announce"))
 			if err != nil {
 				log.Printf("Error responding to peer: %v", err)

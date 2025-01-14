@@ -29,7 +29,7 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		CREATE TABLE IF NOT EXISTS infohashes (
 			info_hash BYTEA NOT NULL PRIMARY KEY,
 			downloaded INTEGER DEFAULT 0 NOT NULL,
-			name TEXT,
+			name TEXT NOT NULL,
 			license TEXT
 		);
 		`)

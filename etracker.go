@@ -12,6 +12,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api", APIHandler(config))
 	mux.HandleFunc("/announce", PeerHandler(config))
+	mux.HandleFunc("/scrape", ScrapeHandler(config))
 
 	s := &http.Server{
 		Addr:              ":8080",
