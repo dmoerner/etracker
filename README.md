@@ -5,10 +5,10 @@ peer selection algorithms to promote healthy Bittorrent swarms.
 
 Feature goals:
 
-- Track good seeders in the Bittorrent swarm, as measured by seeding sizes,
-  length, and speed.
-- When a peer starts to leech a torrent, preferentially give good seeders as
-  peers when the client is itself classified as a good seeder.
+- Implemented: Track good seeders in the Bittorrent swarm, as measured by
+  metrics like seeding sizes, length, and ratio.
+- Implemented: When a peer starts to leech a torrent, preferentially give good
+  seeders as peers when the client is itself classified as a good seeder.
 - When abnormalities are detected in a swarm (broken clients, cheating
   clients), use the tracker warning or error message to communicate with peers
   which IP's they should block.
@@ -22,6 +22,36 @@ preliminary benchmarking.
 
 `etracker` is distributed without copyright under the Unlicense:
 https://unlicense.org/.
+
+# Setup and Installation
+
+`etracker` is currently configured with environment variables, although it is
+intended to switch to TOML in the future. You will need an `.env` file of the
+following sort:
+
+```bash
+# Required variables
+POSTGRES_USER=""
+POSTGRES_PASSWORD=""
+DATABASE_URL="postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432"
+PGDATABASE=""
+
+# Optional variables
+
+# Admin API to add or remove allowed infohashes using the /api endpoint. If
+# left blank or not set, the API is disabled.
+ETRACKER_AUTHORIZATION=""
+
+# Relative or absolute paths to a TLS cert and key. If these are both set,
+# the TLS tracker will automatically be started in addition to the unencrypted
+# tracker.
+ETRACKER_CERTFILE=""
+ETRACKER_KEYFILE=""
+```
+
+`etracker` requires a PostgreSQL database. Distributed in the source is an
+example compose file in the `docker` directory. Two databases need to be
+created by hand: `$PGDATABASE` and `$PGDATABASE_test`
 
 # Technical Discussion: Free-Riding
 
@@ -116,6 +146,10 @@ something which clients could eventually handle automatically.
 
 Blog posts about the development of this tracker will be shared here:
 https://moerner.com.
+
+- Benchmarking bencode implementations: https://moerner.com/posts/isnt-go-reflection-slow/
+- Constructing PostgreSQL queries with non-parameterizable placeholders: https://moerner.com/posts/postgresql-parameter-placeholders/
+- Brainstorming peer distribution algorithms: https://moerner.com/posts/brainstorming-peer-distribution-algorithms/
 
 # Further Resources
 
