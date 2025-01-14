@@ -14,6 +14,12 @@ type Config struct {
 	algorithm     PeeringAlgorithm
 	authorization string
 	dbpool        *pgxpool.Pool
+	tls           tlsConfig
+}
+
+type tlsConfig struct {
+	certFile string
+	keyFile  string
 }
 
 func BuildConfig() Config {
@@ -38,6 +44,14 @@ func BuildConfig() Config {
 
 	algorithm := PeersForAnnounces
 
+	var tls tlsConfig
+	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
+	keyFile, ok2 := os.LookupEnv("ETRACKER_KEYFILE")
+	if ok1 && ok2 {
+		tls.certFile = certFile
+		tls.keyFile = keyFile
+	}
+
 	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
@@ -47,6 +61,7 @@ func BuildConfig() Config {
 		algorithm:     algorithm,
 		authorization: authorization,
 		dbpool:        dbpool,
+		tls:           tls,
 	}
 
 	return config
