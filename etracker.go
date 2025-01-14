@@ -14,6 +14,12 @@ func main() {
 	mux.HandleFunc("/announce", PeerHandler(config))
 	mux.HandleFunc("/scrape", ScrapeHandler(config))
 
+	// Rumor has it that some firewalls will block traffic if there is not
+	// a 200 response from the root path.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	s := &http.Server{
 		Addr:              ":8080",
 		ReadHeaderTimeout: 5 * time.Second,
