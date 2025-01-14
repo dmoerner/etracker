@@ -27,11 +27,14 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// an optional license (for verification, moderation, and search).
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS infohashes (
-			info_hash BYTEA NOT NULL PRIMARY KEY,
+			id SERIAL PRIMARY KEY,
+			info_hash BYTEA NOT NULL UNIQUE,
 			downloaded INTEGER DEFAULT 0 NOT NULL,
 			name TEXT NOT NULL,
 			license TEXT
 		);
+
+		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes(info_hash);
 		`)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
@@ -42,9 +45,12 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// statistics to detect cheaters.
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peerids (
-			peer_id BYTEA NOT NULL PRIMARY KEY,
+			id SERIAL PRIMARY KEY,
+			peer_id BYTEA NOT NULL UNIQUE,
 			peer_max_upload INTEGER DEFAULT 0 NOT NULL
 		);
+
+		CREATE INDEX IF NOT EXISTS idx_peer_id ON peerids(peer_id);
 		`)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create peerids table: %w", err)
@@ -56,18 +62,18 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
-			peer_id BYTEA NOT NULL references peerids(peer_id),
+			id SERIAL PRIMARY KEY,
+			peer_id_id INTEGER references peerids(id),
 			ip_port BYTEA NOT NULL,
-			info_hash BYTEA NOT NULL references infohashes(info_hash),
+			info_hash_id INTEGER references infohashes(id),
 			amount_left INTEGER NOT NULL,
 			downloaded INTEGER NOT NULL,
 			uploaded INTEGER NOT NULL,
 			event INTEGER,
 			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			PRIMARY KEY (peer_id, info_hash)
+			UNIQUE (peer_id_id, info_hash_id)
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_info_hash ON peers(info_hash);
 
 
 		CREATE OR REPLACE FUNCTION trigger_set_timestamp()

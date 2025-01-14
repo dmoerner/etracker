@@ -88,6 +88,10 @@ func teardownTest(config Config) {
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
+	_, err = config.dbpool.Exec(context.Background(), "DROP TABLE peerids;")
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
 
 	config.dbpool.Close()
 }
@@ -538,7 +542,7 @@ func TestAnnounceWrite(t *testing.T) {
 	var info_hash []byte
 	var last_announce time.Time
 
-	err := config.dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
+	err := config.dbpool.QueryRow(context.Background(), "SELECT peer_id, ip_port, info_hash, last_announce FROM peers JOIN peerids ON peers.peer_id_id = peerids.id JOIN infohashes ON peers.info_hash_id = infohashes.id LIMIT 1;").Scan(&peer_id, &ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}

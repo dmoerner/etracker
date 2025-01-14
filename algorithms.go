@@ -20,7 +20,7 @@ func NumwantPeers(config Config, a *Announce) (int, error) {
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
 func PeersForAnnounces(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
 	var torrentCount int
 	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
@@ -47,7 +47,7 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 // TODO: Implement better normalization than this simple linear algorithm which
 // gives at least one peer.
 func PeersForSeeds(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
 	var torrentCount int
 	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
@@ -82,7 +82,7 @@ func PeersForSeeds(config Config, a *Announce) (int, error) {
 // necessary limitation of a public tracker algorithm which relies on peer_id's
 // which reset on restart, rather than an unchanging, unique announce URL.
 func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT amount_left, uploaded, downloaded FROM peers WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
+	query := fmt.Sprintf(`SELECT amount_left, uploaded, downloaded FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
 	rows, err := config.dbpool.Query(context.Background(), query, a.peer_id, stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)

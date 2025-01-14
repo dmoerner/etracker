@@ -34,17 +34,17 @@ func ScrapeHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 		// info_hashes, ok := r.URL.Query()["info_hash"]
 		query := fmt.Sprintf(
 			`WITH recent_announces AS (
-			SELECT DISTINCT ON (peer_id) amount_left, info_hash FROM peers
+			SELECT DISTINCT ON (peer_id_id) amount_left, info_hash_id FROM peers
 			WHERE last_announce >= NOW() - INTERVAL '%s' AND event <> $1
-			ORDER BY peer_id, last_announce DESC
+			ORDER BY peer_id_id, last_announce DESC
 			)
-			SELECT infohashes.info_hash, name, downloaded, COUNT(*) FILTER(WHERE recent_announces.amount_left > 0) AS leechers, COUNT(*) FILTER(WHERE recent_announces.amount_left = 0) as seeders FROM infohashes
+			SELECT info_hash, name, downloaded, COUNT(*) FILTER(WHERE recent_announces.amount_left > 0) AS leechers, COUNT(*) FILTER(WHERE recent_announces.amount_left = 0) as seeders FROM infohashes
 			LEFT JOIN recent_announces
-			ON infohashes.info_hash = recent_announces.info_hash
-			GROUP BY infohashes.info_hash`, "60 minutes")
+			ON infohashes.id = recent_announces.info_hash_id
+			GROUP BY info_hash, name, downloaded`, "60 minutes")
 		rows, err := config.dbpool.Query(context.Background(), query, stopped)
 		if err != nil {
-			abortScrape(w, "error fetching information for scrape")
+			abortScrape(w, fmt.Sprintf("error fetching information for scrape: %v", err))
 			return
 		}
 
