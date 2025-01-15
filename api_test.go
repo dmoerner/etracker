@@ -89,10 +89,10 @@ func TestInsertRemoveInfoHash(t *testing.T) {
 		expectedcode  int
 	}{
 		// Inserting a duplicate key
-		{"insert dupe", "http://example.com:8080/api?action=insert_infohash&info_hash=aaaaaaaaaaaaaaaaaaaa&note=hello", defaultAPIKey, "info_hash aaaaaaaaaaaaaaaaaaaa already inserted", http.StatusBadRequest},
-		{"insert", "http://example.com:8080/api?action=insert_infohash&info_hash=zzzzzzzzzzzzzzzzzzzz&note=hello", defaultAPIKey, "", http.StatusOK},
-		{"remove", "http://example.com:8080/api?action=remove_infohash&info_hash=aaaaaaaaaaaaaaaaaaaa", defaultAPIKey, "", http.StatusOK},
-		{"missing action", "http://example.com:8080/api?info_hash=aaaaaaaaaaaaaaaaaaaa", defaultAPIKey, "", http.StatusBadRequest},
+		{"insert", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", defaultAPIKey, "", http.StatusOK},
+		{"insert dupe", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", defaultAPIKey, "info_hash ffffffffffffffffffffffffffffffffffffffff already inserted", http.StatusBadRequest},
+		{"remove", "http://example.com:8080/api?action=remove_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff", defaultAPIKey, "", http.StatusOK},
+		{"missing action", "http://example.com:8080/api?info_hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultAPIKey, "", http.StatusBadRequest},
 		{"bad infohash", "http://example.com:8080/api?action=insert_infohash&info_hash=a", defaultAPIKey, "", http.StatusBadRequest},
 	}
 
