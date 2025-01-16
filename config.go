@@ -42,7 +42,7 @@ func BuildConfig() Config {
 		log.Print("ETRACKER_AUTHORIZATION not set in environment")
 	}
 
-	algorithm := PeersForAnnounces
+	algorithm := PeersForGoodSeeds
 
 	var tls tlsConfig
 	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
