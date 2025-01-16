@@ -44,6 +44,8 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// peer quality, and will in the future be extended to include
 	// statistics to detect cheaters.
 	_, err = dbpool.Exec(ctx, `
+		DROP TABLE IF EXISTS peerids CASCADE;
+
 		CREATE TABLE IF NOT EXISTS peerids (
 			id SERIAL PRIMARY KEY,
 			peer_id BYTEA NOT NULL UNIQUE,
@@ -61,6 +63,8 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(ctx, `
+		DROP TABLE IF EXISTS peers;
+
 		CREATE TABLE IF NOT EXISTS peers (
 			id SERIAL PRIMARY KEY,
 			peer_id_id INTEGER references peerids(id),
