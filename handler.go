@@ -241,9 +241,12 @@ func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
 		return fmt.Errorf("error calculating number of peers to give: %w", err)
 	}
 
+	// Give a pseudo-random subset of peers.
 	if len(peers) > numToGive {
-		start := rand.Intn(len(peers) - numToGive)
-		peers = peers[start : start+numToGive]
+		rand.Shuffle(len(peers), func(i, j int) {
+			peers[i], peers[j] = peers[j], peers[i]
+		})
+		peers = peers[:numToGive]
 	}
 
 	_, err = w.Write(PeerList(peers))
