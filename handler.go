@@ -193,6 +193,9 @@ func writeAnnounce(config Config, announce *Announce) error {
 	// Update infohashes table on completed event.
 	if announce.event == completed {
 		_, err = config.dbpool.Exec(context.Background(), `UPDATE infohashes SET downloaded = downloaded + 1 where info_hash = $1`, announce.info_hash)
+		if err != nil {
+			return fmt.Errorf("error updating infohashes on downloaded event: %w", err)
+		}
 	}
 
 	// Update peers table
