@@ -26,20 +26,21 @@ def smooth_function(x, numwant, good_seedcount):
     # calculate the steepness relative to a delta.
     delta = 0.1
 
-    k = np.arctanh((numwant - delta - y_0) / (numwant - y_0)) / good_seedcount
+    # add delta in the denominator to avoid division by zero when numwant == y_0.
+    k = np.arctanh((numwant - y_0 - delta) / (numwant - y_0 + delta)) / good_seedcount
 
     return y_0 + (numwant - y_0) * (np.tanh(k * x))
 
 
-# Parameters
-x = np.linspace(0, 200)  # x-values
+if __name__ == "__main__":
+    x = np.linspace(0, 200)  # x-values
 
-y = smooth_function(x, 50, 100)
+    y = smooth_function(x, 50, 100)
 
-# Plot the result
-plt.plot(x, y)
-plt.xlabel("x")
-plt.ylabel("f(x)")
-plt.title("Smoothed Function")
-plt.grid(True)
-plt.show()
+    # Plot the result
+    plt.plot(x, y)
+    plt.xlabel("x")
+    plt.ylabel("f(x)")
+    plt.title("Smoothed Function")
+    plt.grid(True)
+    plt.show()
