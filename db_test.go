@@ -37,6 +37,10 @@ func TestTables(t *testing.T) {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	err = DbInitialize(dbpool)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
 
 	tables := []string{"peers", "infohashes", "peerids"}
 

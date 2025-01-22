@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DbConnect connects to the postgres db and ensures the basic tables are set up.
+// DbConnect connects to the postgres db.
 func DbConnect(db string) (*pgxpool.Pool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -21,11 +21,18 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("unable to connect to db: %w", err)
 	}
 
+	return dbpool, nil
+}
+
+// DbInitialize ensures that all required tables are set up. The infohashes
+// table persists, but peerids and peers tables should be refreshed on each
+// restart.
+func DbInitialize(dbpool *pgxpool.Pool) error {
 	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
 	// and an optional name, which should match the "name" section in the info
 	// section of the torrent file (for use in /scrape and searching), and
 	// an optional license (for verification, moderation, and search).
-	_, err = dbpool.Exec(ctx, `
+	_, err := dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS infohashes (
 			id SERIAL PRIMARY KEY,
 			info_hash BYTEA NOT NULL UNIQUE,
@@ -37,13 +44,13 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes(info_hash);
 		`)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create infohashes table: %w", err)
+		return fmt.Errorf("unable to create infohashes table: %w", err)
 	}
 
 	// peerids table. Includes stored score for each peer used to calculate
 	// peer quality, and will in the future be extended to include
 	// statistics to detect cheaters.
-	_, err = dbpool.Exec(ctx, `
+	_, err = dbpool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS peerids CASCADE;
 
 		CREATE TABLE IF NOT EXISTS peerids (
@@ -55,14 +62,14 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		CREATE INDEX IF NOT EXISTS idx_peer_id ON peerids(peer_id);
 		`)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create peerids table: %w", err)
+		return fmt.Errorf("unable to create peerids table: %w", err)
 	}
 
 	// peers table, which includes information from announces.
 	// "left" is a reserved word so we use amount_left.
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
-	_, err = dbpool.Exec(ctx, `
+	_, err = dbpool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS peers;
 
 		CREATE TABLE IF NOT EXISTS peers (
@@ -94,8 +101,8 @@ func DbConnect(db string) (*pgxpool.Pool, error) {
 		EXECUTE PROCEDURE trigger_set_timestamp();
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create peers table: %w", err)
+		return fmt.Errorf("unable to create peers table: %w", err)
 	}
 
-	return dbpool, nil
+	return nil
 }

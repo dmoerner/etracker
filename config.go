@@ -57,6 +57,11 @@ func BuildConfig() Config {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
+	err = DbInitialize(dbpool)
+	if err != nil {
+		log.Fatalf("Unable to initialize DB: %v", err)
+	}
+
 	config := Config{
 		algorithm:     algorithm,
 		authorization: authorization,
