@@ -199,5 +199,6 @@ func smoothFunction(x, numWanted, goodSeedCount int) int {
 	// Add the delta in the denominator to avoid division by zero.
 	k := math.Atanh((float64(numWanted)-y_int-delta)/(float64(numWanted)-y_int+delta)) / float64(goodSeedCount)
 
-	return int(y_int + (float64(numWanted)-y_int)*(math.Tanh(k*float64(x))))
+	// Rounding up makes testing at the upper bound easier.
+	return int(math.Ceil(y_int + (float64(numWanted)-y_int)*(math.Tanh(k*float64(x)))))
 }
