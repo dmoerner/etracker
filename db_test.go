@@ -12,8 +12,10 @@ import (
 
 func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 	var tableExists bool
-	err := dbpool.QueryRow(context.Background(),
-		"select exists (select from pg_tables where tablename = $1);", tablename).Scan(&tableExists)
+	err := dbpool.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = $1);
+		`,
+		tablename).Scan(&tableExists)
 
 	return tableExists, err
 }

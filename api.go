@@ -90,7 +90,10 @@ func InsertInfoHash(config Config, r *http.Request) (string, error) {
 	name := r.URL.Query().Get("name")
 	license := r.URL.Query().Get("license")
 
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash, name, license) VALUES ($1, $2, $3);`, []byte(info_hash), name, license)
+	_, err = config.dbpool.Exec(context.Background(), `
+		INSERT INTO infohashes (info_hash, name, license) VALUES ($1, $2, $3);
+		`,
+		[]byte(info_hash), name, license)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -117,7 +120,10 @@ func RemoveInfoHash(config Config, r *http.Request) (string, error) {
 	}
 	// info_hash is required parameter
 
-	_, err = config.dbpool.Exec(context.Background(), `DELETE FROM infohashes WHERE info_hash = $1;`, []byte(info_hash))
+	_, err = config.dbpool.Exec(context.Background(), `
+		DELETE FROM infohashes WHERE info_hash = $1;
+		`,
+		[]byte(info_hash))
 	if err != nil {
 		return "", fmt.Errorf("unable to remove info_hash: %w", err)
 	}

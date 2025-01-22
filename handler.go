@@ -158,8 +158,10 @@ var ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
 // checkInfoHash verifies that an announce is on the allowlist.
 func checkInfoHash(config Config, announce *Announce) error {
 	var b bool
-	err := config.dbpool.QueryRow(context.Background(),
-		"select exists (select from infohashes where info_hash = $1);", announce.info_hash).Scan(&b)
+	err := config.dbpool.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
+		`,
+		announce.info_hash).Scan(&b)
 	if err != nil {
 		return fmt.Errorf("error checking infohashes: %w", err)
 	}
@@ -174,7 +176,15 @@ func writeAnnounce(config Config, announce *Announce) error {
 	// Calculate most recent upload change.
 	var last_uploaded int
 	var upload_change int
-	err := config.dbpool.QueryRow(context.Background(), `SELECT uploaded FROM peers LEFT JOIN infohashes ON peers.info_hash_id = infohashes.id LEFT JOIN peerids ON peers.peer_id_id = peerids.id WHERE info_hash = $1 AND peer_id <> $2 AND event <> $3 ORDER BY last_announce DESC LIMIT 1;`, announce.info_hash, announce.peer_id, stopped).Scan(&last_uploaded)
+	err := config.dbpool.QueryRow(context.Background(), `
+		SELECT uploaded
+		FROM peers
+		LEFT JOIN infohashes ON peers.info_hash_id = infohashes.id
+		LEFT JOIN peerids ON peers.peer_id_id = peerids.id
+		WHERE info_hash = $1 AND peer_id <> $2 AND event <> $3
+		ORDER BY last_announce DESC LIMIT 1;
+		`,
+		announce.info_hash, announce.peer_id, stopped).Scan(&last_uploaded)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			upload_change = 0
@@ -185,27 +195,38 @@ func writeAnnounce(config Config, announce *Announce) error {
 	upload_change = announce.uploaded - last_uploaded
 
 	// Update peerids table, setting a new peer_max_upload
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peerids (peer_id, peer_max_upload) VALUES ($1, $2) ON CONFLICT (peer_id) DO UPDATE SET peer_max_upload = GREATEST(peerids.peer_max_upload, $2);`, announce.peer_id, upload_change)
+	_, err = config.dbpool.Exec(context.Background(), `
+		INSERT INTO peerids (peer_id, peer_max_upload)
+		VALUES ($1, $2)
+		ON CONFLICT (peer_id)
+		DO UPDATE SET peer_max_upload = GREATEST(peerids.peer_max_upload, $2);
+		`,
+		announce.peer_id, upload_change)
 	if err != nil {
 		return fmt.Errorf("error inserting peer_id: %w", err)
 	}
 
 	// Update infohashes table on completed event.
 	if announce.event == completed {
-		_, err = config.dbpool.Exec(context.Background(), `UPDATE infohashes SET downloaded = downloaded + 1 where info_hash = $1`, announce.info_hash)
+		_, err = config.dbpool.Exec(context.Background(), `
+			UPDATE infohashes SET downloaded = downloaded + 1 WHERE info_hash = $1
+			`,
+			announce.info_hash)
 		if err != nil {
 			return fmt.Errorf("error updating infohashes on downloaded event: %w", err)
 		}
 	}
 
 	// Update peers table
-	_, err = config.dbpool.Exec(context.Background(), `INSERT INTO peers (peer_id_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
+	_, err = config.dbpool.Exec(context.Background(), `
+		INSERT INTO peers (peer_id_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
 		SELECT peerids.id, infohashes.id, $3, $4, $5, $6, $7
 		FROM infohashes
 		JOIN peerids on peerids.peer_id = $1
 		WHERE infohashes.info_hash = $2
 		ON CONFLICT (peer_id_id, info_hash_id)
-		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6, event = $7;`,
+		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6, event = $7;
+		`,
 		announce.peer_id, announce.info_hash, announce.ip_port, announce.amount_left, announce.uploaded, announce.downloaded, announce.event)
 	if err != nil {
 		return fmt.Errorf("error upserting peer row: %w", err)
@@ -227,7 +248,15 @@ func writeAnnounce(config Config, announce *Announce) error {
 // for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
 // https://github.com/jackc/pgx/issues/1043
 func sendReply(config Config, w http.ResponseWriter, a *Announce) error {
-	query := fmt.Sprintf(`SELECT DISTINCT ON (peer_id) ip_port FROM peers JOIN peerids ON peers.peer_id_id = peerids.id JOIN infohashes ON peers.info_hash_id = infohashes.id WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3 ORDER BY peer_id, last_announce DESC;`, interval)
+	query := fmt.Sprintf(`
+		SELECT DISTINCT ON (peer_id) ip_port
+		FROM peers
+		JOIN peerids ON peers.peer_id_id = peerids.id
+		JOIN infohashes ON peers.info_hash_id = infohashes.id
+		WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3
+		ORDER BY peer_id, last_announce DESC;
+		`,
+		interval)
 	rows, err := config.dbpool.Query(context.Background(), query, a.info_hash, a.peer_id, stopped)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)

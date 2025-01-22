@@ -25,7 +25,13 @@ func NumwantPeers(config Config, a *Announce) (int, error) {
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
 func PeersForAnnounces(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM peers
+		JOIN peerids ON peers.peer_id_id = peerids.id
+		WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $2;
+		`,
+		interval)
 	var torrentCount int
 	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
@@ -49,7 +55,13 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 //
 // A problem with this algorithm is that it does not count partial seeders.
 func PeersForSeeds(config Config, a *Announce) (int, error) {
-	query := fmt.Sprintf(`SELECT COUNT(*) FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2;`, interval)
+	query := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM peers
+		JOIN peerids ON peers.peer_id_id = peerids.id
+		WHERE peer_id = $1 AND amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $2;
+		`,
+		interval)
 	var torrentCount int
 	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
 	if err != nil {
@@ -88,7 +100,14 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 		return 0, nil
 	}
 
-	query := fmt.Sprintf(`SELECT DISTINCT ON (info_hash_id) amount_left, uploaded, downloaded FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' and event <> $2 ORDER BY info_hash_id, last_announce DESC;`, interval)
+	query := fmt.Sprintf(`
+		SELECT DISTINCT ON (info_hash_id) amount_left, uploaded, downloaded
+		FROM peers
+		JOIN peerids ON peers.peer_id_id = peerids.id
+		WHERE peer_id = $1 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $2
+		ORDER BY info_hash_id, last_announce DESC;
+		`,
+		interval)
 	rows, err := config.dbpool.Query(context.Background(), query, a.peer_id, stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
@@ -138,9 +157,17 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 	// than 1 standard deviation above the mean. The minimum for small swarms
 	// is the constant minimumPeers.
 	query = fmt.Sprintf(`
-		WITH seed_counts AS
-			(SELECT COUNT(*) as seed_count FROM peers JOIN peerids ON peers.peer_id_id = peerids.id WHERE amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $1 GROUP BY peerids.id)
-		SELECT COALESCE((STDDEV_POP(seed_count) + AVG(seed_count))::INTEGER, $2) FROM seed_counts;`, interval)
+		WITH seed_counts AS (
+			SELECT COUNT(*) as seed_count
+			FROM peers
+			JOIN peerids ON peers.peer_id_id = peerids.id
+			WHERE amount_left = 0 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $1
+			GROUP BY peerids.id
+		)
+		SELECT COALESCE((STDDEV_POP(seed_count) + AVG(seed_count))::INTEGER, $2)
+		FROM seed_counts;
+		`,
+		interval)
 	var goodSeedCount int
 	err = config.dbpool.QueryRow(context.Background(), query, stopped, minimumPeers).Scan(&goodSeedCount)
 	if err != nil {
