@@ -25,7 +25,7 @@ type tlsConfig struct {
 func BuildConfig() Config {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+		log.Print("Unable to load .env file, will use existing environment for configuration variables.")
 	}
 	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
 		log.Fatal("DATABASE_URL not set in environment")
