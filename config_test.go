@@ -62,3 +62,26 @@ func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 
 	return config
 }
+
+func teardownTest(config Config) {
+	_, err := config.dbpool.Exec(context.Background(), `
+		DROP TABLE peers;
+		`)
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
+	_, err = config.dbpool.Exec(context.Background(), `
+		DROP TABLE infohashes;
+		`)
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
+	_, err = config.dbpool.Exec(context.Background(), `
+		DROP TABLE peerids;
+		`)
+	if err != nil {
+		log.Fatalf("error dropping table on db cleanup: %v", err)
+	}
+
+	config.dbpool.Close()
+}

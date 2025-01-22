@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -27,7 +29,7 @@ type Request struct {
 	event      Event
 }
 
-type DummyRequest struct {
+type RequestResponseWrapper struct {
 	request  *http.Request
 	recorder *httptest.ResponseRecorder
 }
@@ -54,8 +56,8 @@ const (
 func formatRequest(request Request) string {
 	announce := fmt.Sprintf(
 		"http://example.com/announce/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
-		request.peer_id,
-		request.info_hash,
+		url.QueryEscape(request.peer_id),
+		url.QueryEscape(request.info_hash),
 		request.port,
 		request.numwant,
 		request.uploaded,
@@ -79,27 +81,61 @@ func formatRequest(request Request) string {
 	return announce
 }
 
-func teardownTest(config Config) {
-	_, err := config.dbpool.Exec(context.Background(), `
-		DROP TABLE peers;
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
-	}
-	_, err = config.dbpool.Exec(context.Background(), `
-		DROP TABLE infohashes;
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
-	}
-	_, err = config.dbpool.Exec(context.Background(), `
-		DROP TABLE peerids;
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
+// createNSeeders is a helper function which creates n request structs for a
+// specified info_hash. Used to populate the handler with many existing
+// seeders.
+func createNSeeders(n int, info_hash string) []Request {
+	var requests []Request
+
+	for range n {
+		peer_id := make([]byte, 20)
+		_, _ = rand.Read(peer_id)
+		requests = append(requests, Request{
+			peer_id:   string(peer_id),
+			info_hash: info_hash,
+		})
 	}
 
-	config.dbpool.Close()
+	return requests
+}
+
+// seedNTorrents is a helper function which adds n torrents with random
+// info_hashes to a particular peer_id. This also requires inserting these
+// info_hashes into the allowlist in the test db. Used to mimic good or bad
+// seeding behavior.
+func seedNTorrents(config Config, n int, peer_id string) []Request {
+	var requests []Request
+
+	for i := range n {
+		info_hash := make([]byte, 20)
+		_, _ = rand.Read(info_hash)
+		_, err := config.dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);`, info_hash, fmt.Sprintf("test infohash %d", i))
+		if err != nil {
+			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
+		}
+		requests = append(requests, Request{
+			peer_id:   peer_id,
+			info_hash: string(info_hash),
+		})
+	}
+	return requests
+}
+
+// countPeersReceived is a helper function which reads in a compact HTTP
+// tracker response and returns the number of peers.
+func countPeersReceived(recorder *httptest.ResponseRecorder) int {
+	resp := recorder.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		return 0
+	}
+
+	// Use type assertions to extract the compacted peerlist, which
+	// uses 6 bytes per peer.
+	peersReceived := []byte(data.(map[string]any)["peers"].(string))
+	numRec := len(peersReceived) / 6
+
+	return numRec
 }
 
 func TestDownloadedIncrement(t *testing.T) {
@@ -191,14 +227,14 @@ func TestPeersForSeeds(t *testing.T) {
 		},
 	}
 
-	var dummyRequests []DummyRequest
+	var dummyRequests []RequestResponseWrapper
 
 	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
 		w := httptest.NewRecorder()
-		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
 	}
 
@@ -212,16 +248,8 @@ func TestPeersForSeeds(t *testing.T) {
 	}
 
 	for i := range expected {
-		resp := dummyRequests[expected[i].index].recorder.Result()
-		data, err := bencode.Decode(resp.Body)
-		if err != nil {
-			t.Errorf("failure decoding tracker response: %v", err)
-		}
-
-		// Use type assertions to extract the compacted peerlist, which
-		// uses 6 bytes per peer.
-		peersReceived := []byte(data.(map[string]any)["peers"].(string))
-		numRec := len(peersReceived) / 6
+		resp := dummyRequests[expected[i].index].recorder
+		numRec := countPeersReceived(resp)
 
 		// Hardcoded for test: We expect that we should receive 1 peer because
 		// we have made announces for 1 torrent, although there are 3 peers
@@ -258,29 +286,21 @@ func TestStopped(t *testing.T) {
 		},
 	}
 
-	var dummyRequests []DummyRequest
+	var dummyRequests []RequestResponseWrapper
 
 	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
 		w := httptest.NewRecorder()
-		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
 
-	resp := dummyRequests[lastIndex].recorder.Result()
-	data, err := bencode.Decode(resp.Body)
-	if err != nil {
-		t.Errorf("failure decoding tracker response: %v", err)
-	}
-
-	// Use type assertions to extract the compacted peerlist, which
-	// uses 6 bytes per peer.
-	peersReceived := []byte(data.(map[string]any)["peers"].(string))
-	numRec := len(peersReceived) / 6
+	resp := dummyRequests[lastIndex].recorder
+	numRec := countPeersReceived(resp)
 
 	// Hardcoded for test: We expect that we should receive 0 peers despite
 	// wanting one, because the only peer in the swarm announces that
@@ -291,7 +311,72 @@ func TestStopped(t *testing.T) {
 	}
 }
 
-func TestPeersForGoodSeeds(t *testing.T) {
+// TestPeersForGoodSeedsBigSwarm builds a swarm of 50 seeders, and then tests
+// two new leechers: One with zero torrents seeding, and a second with six
+// total torrents seeding. The expectations for this test are set by the values
+// encoded in algorithms.go.
+func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
+	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
+	defer teardownTest(config)
+
+	// Populate 50 seeders
+	seeders := createNSeeders(50, allowedInfoHashes["a"])
+
+	handler := PeerHandler(config)
+
+	for _, r := range seeders {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		handler(w, req)
+	}
+
+	// Test bad seeder, they are not currently in the swarm.
+	badSeederRequest := Request{
+		peer_id:   peerids[1],
+		info_hash: allowedInfoHashes["a"],
+		numwant:   50,
+	}
+	badSeederExpected := minimumPeers
+
+	badSeederRecorder := httptest.NewRecorder()
+	handler(badSeederRecorder,
+		httptest.NewRequest("GET", formatRequest(badSeederRequest), nil))
+
+	badSeederReceived := countPeersReceived(badSeederRecorder)
+	if badSeederReceived != badSeederExpected {
+		t.Errorf("bad seeder: expected %d seeders, got %d", badSeederExpected, badSeederReceived)
+	}
+
+	// Test good seeder, they are the first infohash in seeders.
+	goodSeederRequest := Request{
+		peer_id:   seeders[0].peer_id,
+		info_hash: allowedInfoHashes["a"],
+		numwant:   50,
+	}
+	goodSeederExpected := goodSeederRequest.numwant
+
+	goodSeederSeeds := seedNTorrents(config, 5, goodSeederRequest.peer_id)
+	for _, r := range goodSeederSeeds {
+		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		w := httptest.NewRecorder()
+		handler(w, req)
+	}
+
+	goodSeederRecorder := httptest.NewRecorder()
+	handler(goodSeederRecorder,
+		httptest.NewRequest("GET", formatRequest(goodSeederRequest), nil))
+
+	goodSeederReceived := countPeersReceived(goodSeederRecorder)
+	if goodSeederReceived != goodSeederExpected {
+		t.Errorf("good seeder: expected %d seeders, got %d", goodSeederExpected, goodSeederReceived)
+	}
+}
+
+// TestPeersForGoodSeedsSmallSwarm is an older test from before the
+// introduction of the smoothing algorithm. With the new smoothing function,
+// all it verifies is that PeersForGoodSeeds works properly when the swarm
+// size is below minimumPeers.
+func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
 	defer teardownTest(config)
 
@@ -340,29 +425,21 @@ func TestPeersForGoodSeeds(t *testing.T) {
 		},
 	}
 
-	var dummyRequests []DummyRequest
+	var dummyRequests []RequestResponseWrapper
 
 	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
 		w := httptest.NewRecorder()
-		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
 
-	resp := dummyRequests[lastIndex].recorder.Result()
-	data, err := bencode.Decode(resp.Body)
-	if err != nil {
-		t.Errorf("failure decoding tracker response: %v", err)
-	}
-
-	// Use type assertions to extract the compacted peerlist, which
-	// uses 6 bytes per peer.
-	peersReceived := []byte(data.(map[string]any)["peers"].(string))
-	numRec := len(peersReceived) / 6
+	resp := dummyRequests[lastIndex].recorder
+	numRec := countPeersReceived(resp)
 
 	// Hardcoded for test: We expect that we should receive 4 peers because
 	// we are seeding 2 torrents and both have a positive ratio.
@@ -415,29 +492,21 @@ func TestPeersForAnnounces(t *testing.T) {
 		},
 	}
 
-	var dummyRequests []DummyRequest
+	var dummyRequests []RequestResponseWrapper
 
 	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
 		w := httptest.NewRecorder()
-		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
 
-	resp := dummyRequests[lastIndex].recorder.Result()
-	data, err := bencode.Decode(resp.Body)
-	if err != nil {
-		t.Errorf("failure decoding tracker response: %v", err)
-	}
-
-	// Use type assertions to extract the compacted peerlist, which
-	// uses 6 bytes per peer.
-	peersReceived := []byte(data.(map[string]any)["peers"].(string))
-	numRec := len(peersReceived) / 6
+	resp := dummyRequests[lastIndex].recorder
+	numRec := countPeersReceived(resp)
 
 	// Hardcoded for test: We expect that we should receive 1 peer because
 	// we have made announces for 1 torrent, although there are 3 peers
@@ -473,29 +542,22 @@ func TestPeerList(t *testing.T) {
 		},
 	}
 
-	var dummyRequests []DummyRequest
+	var dummyRequests []RequestResponseWrapper
 
 	handler := PeerHandler(config)
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", formatRequest(r), nil)
 		w := httptest.NewRecorder()
-		dummyRequests = append(dummyRequests, DummyRequest{request: req, recorder: w})
+		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
 
-	resp := dummyRequests[lastIndex].recorder.Result()
-	data, err := bencode.Decode(resp.Body)
-	if err != nil {
-		t.Errorf("failure decoding tracker response: %v", err)
-	}
+	resp := dummyRequests[lastIndex].recorder
+	numRec := countPeersReceived(resp)
 
-	// Use type assertions to extract the compacted peerlist, which
-	// uses 6 bytes per peer.
-	peersReceived := []byte(data.(map[string]any)["peers"].(string))
-	numRec := len(peersReceived) / 6
 	if numRec != requests[lastIndex].numwant {
 		t.Errorf("expected %d peers, received %d", requests[lastIndex].numwant, numRec)
 	}
