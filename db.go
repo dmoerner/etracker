@@ -47,7 +47,8 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 
 	// peerids table. Includes stored score for each peer used to calculate
 	// peer quality, and will in the future be extended to include
-	// statistics to detect cheaters.
+	// statistics to detect cheaters. At the moment, the peer_max_upload
+	// key is written but not read.
 	_, err = dbpool.Exec(context.Background(), `
 		DROP TABLE IF EXISTS peerids CASCADE;
 

@@ -194,7 +194,9 @@ func writeAnnounce(config Config, announce *Announce) error {
 	}
 	upload_change = announce.uploaded - last_uploaded
 
-	// Update peerids table, setting a new peer_max_upload
+	// Update peerids table, setting a new peer_max_upload. At the moment this key
+	// is only written, but not read. It is an example of the kind of information
+	// which I hope will be useful in the future to detect cheating.
 	_, err = config.dbpool.Exec(context.Background(), `
 		INSERT INTO peerids (peer_id, peer_max_upload)
 		VALUES ($1, $2)
