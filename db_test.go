@@ -2,12 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 )
 
 func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
@@ -21,31 +18,13 @@ func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 }
 
 func TestTables(t *testing.T) {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
-	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
-		log.Fatal("DATABASE_URL not set in environment")
-	}
-	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
-		log.Fatal("PGDATABASE not set in environment")
-	}
-
-	testdb := os.Getenv("PGDATABASE") + "_test"
-	dbpool, err := DbConnect(testdb)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	err = DbInitialize(dbpool)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
+	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	defer teardownTest(config)
 
 	tables := []string{"peers", "infohashes", "peerids"}
 
 	for _, table := range tables {
-		ok, err := tableExists(dbpool, table)
+		ok, err := tableExists(config.dbpool, table)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -55,12 +34,12 @@ func TestTables(t *testing.T) {
 		}
 
 		// Postgres doesn't support parameter placeholders for DROP.
-		_, err = dbpool.Exec(context.Background(), "drop table "+table)
+		_, err = config.dbpool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+" CASCADE;")
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 
-		ok, err = tableExists(dbpool, table)
+		ok, err = tableExists(config.dbpool, table)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

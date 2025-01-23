@@ -3,20 +3,18 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // DbConnect connects to the postgres db.
-func DbConnect(db string) (*pgxpool.Pool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func DbConnect() (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig("")
+	if err != nil {
+		return nil, fmt.Errorf("unable to get db config from environment: %w", err)
+	}
 
-	db_url := os.Getenv("DATABASE_URL") + "/" + db
-
-	dbpool, err := pgxpool.New(ctx, db_url)
+	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to db: %w", err)
 	}

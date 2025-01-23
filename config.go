@@ -27,11 +27,17 @@ func BuildConfig() Config {
 	if err != nil {
 		log.Print("Unable to load .env file, will use existing environment for configuration variables.")
 	}
-	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
-		log.Fatal("DATABASE_URL not set in environment")
+	if _, ok := os.LookupEnv("PGHOST"); !ok {
+		log.Fatal("PGHOST not set in environment.")
 	}
 	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
-		log.Fatal("PGDATABASE not set in environment")
+		log.Fatal("PGDATABASE not set in environment.")
+	}
+	if _, ok := os.LookupEnv("PGUSER"); !ok {
+		log.Fatal("PGUSER not set in environment.")
+	}
+	if _, ok := os.LookupEnv("PGPASSWORD"); !ok {
+		log.Fatal("PGPASSWORD not set in environment.")
 	}
 
 	// An empty authorization string in the config means the API is forbidden.
@@ -39,7 +45,7 @@ func BuildConfig() Config {
 	var authorization string
 	authorization, ok := os.LookupEnv("ETRACKER_AUTHORIZATION")
 	if !ok {
-		log.Print("ETRACKER_AUTHORIZATION not set in environment")
+		log.Print("ETRACKER_AUTHORIZATION not set in environment.")
 	}
 
 	algorithm := PeersForGoodSeeds
@@ -50,9 +56,10 @@ func BuildConfig() Config {
 	if ok1 && ok2 {
 		tls.certFile = certFile
 		tls.keyFile = keyFile
+		log.Print("TLS tracker enabled.")
 	}
 
-	dbpool, err := DbConnect(os.Getenv("PGDATABASE"))
+	dbpool, err := DbConnect()
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}

@@ -17,14 +17,17 @@ func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	if _, ok := os.LookupEnv("DATABASE_URL"); !ok {
+	if _, ok := os.LookupEnv("PGUSER"); !ok {
 		log.Fatal("DATABASE_URL not set in environment")
 	}
-	if _, ok := os.LookupEnv("PGDATABASE"); !ok {
-		log.Fatal("PGDATABASE not set in environment")
+	if _, ok := os.LookupEnv("PGPASSWORD"); !ok {
+		log.Fatal("DATABASE_URL not set in environment")
 	}
+	os.Setenv("PGDATABASE", "etracker_test")
+	os.Setenv("PGPORT", "5432")
+	os.Setenv("PGHOST", "localhost")
 
-	dbpool, err := DbConnect(os.Getenv("PGDATABASE") + "_test")
+	dbpool, err := DbConnect()
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
@@ -43,6 +46,16 @@ func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 		log.Fatalf("Unable to initialize DB: %v", err)
 	}
 
+	// // Postgres does not support create database if not exists, so we use a subquery.
+	// _, err = dbpool.Exec(context.Background(),
+	// 	`
+	// 	SELECT 'CREATE DATABASE etracker_test'
+	// 	WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'etracker_test')\gexec
+	// 	`)
+	// if err != nil {
+	// 	log.Fatalf("unable to create test database: %v", err)
+	// }
+	//
 	for _, v := range allowedInfoHashes {
 		_, err = dbpool.Exec(context.Background(), `
 			INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);
@@ -65,19 +78,19 @@ func buildTestConfig(algorithm PeeringAlgorithm, authorization string) Config {
 
 func teardownTest(config Config) {
 	_, err := config.dbpool.Exec(context.Background(), `
-		DROP TABLE peers;
+		DROP TABLE IF EXISTS peers;
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 	_, err = config.dbpool.Exec(context.Background(), `
-		DROP TABLE infohashes;
+		DROP TABLE IF EXISTS infohashes;
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 	_, err = config.dbpool.Exec(context.Background(), `
-		DROP TABLE peerids;
+		DROP TABLE IF EXISTS peerids;
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)

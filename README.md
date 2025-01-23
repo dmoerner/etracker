@@ -25,33 +25,24 @@ https://unlicense.org/.
 
 # Setup and Installation
 
-`etracker` is currently configured with environment variables, although it is
-intended to switch to TOML in the future. You will need an `.env` file of the
-following sort:
+`etracker` is designed to work with Docker and Podman (primary testing is done with
+Podman). The included "docker" directory includes a Dockerfile to build a Docker image. You can build it with a command like the following:
 
 ```bash
-# Required variables
-POSTGRES_USER=""
-POSTGRES_PASSWORD=""
-DATABASE_URL="postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432"
-PGDATABASE=""
-
-# Optional variables
-
-# Admin API to add or remove allowed infohashes using the /api endpoint. If
-# left blank or not set, the API is disabled.
-ETRACKER_AUTHORIZATION=""
-
-# Relative or absolute paths to a TLS cert and key. If these are both set,
-# the TLS tracker will automatically be started in addition to the unencrypted
-# tracker.
-ETRACKER_CERTFILE=""
-ETRACKER_KEYFILE=""
+$ podman build --no-cache --pull -f docker/Dockerfile . -t user/etracker
 ```
 
-`etracker` requires a PostgreSQL database. Distributed in the source is an
-example compose file in the `docker` directory. Two databases need to be
-created by hand: `$PGDATABASE` and `$PGDATABASE_test`
+You can then use Docker or Podman compose (podman-compose >= 1.3.0) to run the
+tracker. Make sure you appropriately set the environment variables for the
+PostgreSQL database. 
+
+There is optional support for enabling access to the Admin
+API and to the TLS tracker. For the latter, you will need
+to provide the appropriate certificates yourself. Self-signed certificates for
+local use can easily be generated with https://go.dev/src/crypto/tls/generate_cert.go
+
+For easy and safe testing, the compose file also includes a configuration for a
+second testing database.
 
 # Technical Discussion: Free-Riding
 
