@@ -58,6 +58,7 @@ func APIHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request)
 		}
 		_, err = io.WriteString(w, reply)
 		if err != nil {
+			// Log an error if we are unable to respond to client.
 			log.Printf("Error responding to API request: %v", err)
 		}
 	}
@@ -108,6 +109,9 @@ func InsertInfoHash(conf config.Config, r *http.Request) (string, error) {
 	return "", nil
 }
 
+// RemoveInfoHash is a function which takes the info_hash from a query and
+// removes it from the database. It always returns the empty string, and also
+// returns either an error or nil.
 func RemoveInfoHash(conf config.Config, r *http.Request) (string, error) {
 	// info_hash_hex is required parameter, must be a hex digest
 	info_hash_hex := r.URL.Query().Get("info_hash")
@@ -116,7 +120,6 @@ func RemoveInfoHash(conf config.Config, r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// info_hash is required parameter
 
 	_, err = conf.Dbpool.Exec(context.Background(), `
 		DELETE FROM infohashes

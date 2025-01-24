@@ -5,6 +5,7 @@ import (
 	"etracker/internal/bencode"
 	"etracker/internal/config"
 	"fmt"
+	"log"
 	"net/http"
 
 	bencode_go "github.com/jackpal/bencode-go"
@@ -65,7 +66,8 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 			"60 minutes")
 		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
 		if err != nil {
-			abortScrape(w, fmt.Sprintf("error fetching information for scrape: %v", err))
+			log.Printf("Error fetching data for scrape: %v", err)
+			abortScrape(w, "error fetching data for scrape")
 			return
 		}
 
@@ -84,21 +86,22 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 
 			err = rows.Scan(&info_hash, &name, &downloaded, &incomplete, &complete)
 			if err != nil {
-				abortScrape(w, "error constructing scrape response")
-				return
+				// This error will be handled when rows.Err() is checked.
+				break
 			}
 			scrape.Files[string(info_hash)] = File{complete, downloaded, incomplete, name}
 		}
 
 		if rows.Err() != nil {
-			abortScrape(w, "error parsing db rows for scrape")
+			log.Printf("Error parsing data for scrape: %v", rows.Err())
+			abortScrape(w, "error parsing data for scrape")
 			return
 		}
 
 		err = bencode_go.Marshal(w, scrape)
 		if err != nil {
-			abortScrape(w, "error sending bencoded result")
-			return
+			// Log an error if we are unable to respond to client.
+			log.Printf("Error sending scrape response to client: %v", err)
 		}
 	}
 }
