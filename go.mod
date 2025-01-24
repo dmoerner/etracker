@@ -1,4 +1,4 @@
-module etracker
+module github.com/dmoerner/etracker
 
 go 1.22.7
 

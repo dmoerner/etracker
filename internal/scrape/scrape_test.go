@@ -1,12 +1,13 @@
 package scrape
 
 import (
-	"etracker/internal/config"
-	"etracker/internal/handler"
-	"etracker/internal/testutils"
 	"io"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/dmoerner/etracker/internal/config"
+	"github.com/dmoerner/etracker/internal/handler"
+	"github.com/dmoerner/etracker/internal/testutils"
 )
 
 func TestScrape(t *testing.T) {

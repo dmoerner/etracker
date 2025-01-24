@@ -2,12 +2,13 @@ package testutils
 
 import (
 	"context"
-	"etracker/internal/config"
-	"etracker/internal/db"
 	"fmt"
 	"log"
 	"net/url"
 	"os"
+
+	"github.com/dmoerner/etracker/internal/config"
+	"github.com/dmoerner/etracker/internal/db"
 )
 
 const DefaultAPIKey = "testauthorizationkey"

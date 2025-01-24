@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"etracker/internal/config"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/dmoerner/etracker/internal/config"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"

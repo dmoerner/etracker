@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"etracker/internal/bencode"
-	"etracker/internal/config"
 	"fmt"
 	"log"
 	"math/rand"
@@ -13,6 +11,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/dmoerner/etracker/internal/bencode"
+	"github.com/dmoerner/etracker/internal/config"
 
 	"github.com/jackc/pgx/v5"
 )

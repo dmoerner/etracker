@@ -2,11 +2,12 @@ package scrape
 
 import (
 	"context"
-	"etracker/internal/bencode"
-	"etracker/internal/config"
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/dmoerner/etracker/internal/bencode"
+	"github.com/dmoerner/etracker/internal/config"
 
 	bencode_go "github.com/jackpal/bencode-go"
 )

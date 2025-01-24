@@ -1,13 +1,14 @@
 package main
 
 import (
-	"etracker/internal/api"
-	"etracker/internal/config"
-	"etracker/internal/handler"
-	"etracker/internal/scrape"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/dmoerner/etracker/internal/api"
+	"github.com/dmoerner/etracker/internal/config"
+	"github.com/dmoerner/etracker/internal/handler"
+	"github.com/dmoerner/etracker/internal/scrape"
 )
 
 func main() {

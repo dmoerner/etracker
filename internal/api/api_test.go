@@ -1,11 +1,12 @@
 package api
 
 import (
-	"etracker/internal/testutils"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/dmoerner/etracker/internal/testutils"
 )
 
 // TestUnsetAuthorization is a critical test. Due to the lack of optional

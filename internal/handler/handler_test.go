@@ -5,8 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
-	"etracker/internal/config"
-	"etracker/internal/testutils"
 	"fmt"
 	"log"
 	"net"
@@ -14,6 +12,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/dmoerner/etracker/internal/config"
+	"github.com/dmoerner/etracker/internal/testutils"
 
 	bencode "github.com/jackpal/bencode-go"
 )

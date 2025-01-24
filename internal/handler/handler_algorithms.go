@@ -4,9 +4,10 @@ package handler
 
 import (
 	"context"
-	"etracker/internal/config"
 	"fmt"
 	"math"
+
+	"github.com/dmoerner/etracker/internal/config"
 )
 
 // The current default algorithm.

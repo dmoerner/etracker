@@ -1,9 +1,10 @@
 package config
 
 import (
-	"etracker/internal/db"
 	"log"
 	"os"
+
+	"github.com/dmoerner/etracker/internal/db"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
