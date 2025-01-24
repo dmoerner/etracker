@@ -92,7 +92,8 @@ func InsertInfoHash(conf config.Config, r *http.Request) (string, error) {
 	license := r.URL.Query().Get("license")
 
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO infohashes (info_hash, name, license) VALUES ($1, $2, $3);
+		INSERT INTO infohashes (info_hash, name, license)
+		    VALUES ($1, $2, $3)
 		`,
 		[]byte(info_hash), name, license)
 	if err != nil {
@@ -118,7 +119,8 @@ func RemoveInfoHash(conf config.Config, r *http.Request) (string, error) {
 	// info_hash is required parameter
 
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		DELETE FROM infohashes WHERE info_hash = $1;
+		DELETE FROM infohashes
+		WHERE info_hash = $1
 		`,
 		[]byte(info_hash))
 	if err != nil {

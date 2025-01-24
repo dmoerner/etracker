@@ -159,12 +159,19 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	var last_uploaded int
 	var upload_change int
 	err := conf.Dbpool.QueryRow(context.Background(), `
-		SELECT uploaded
-		FROM peers
-		LEFT JOIN infohashes ON peers.info_hash_id = infohashes.id
-		LEFT JOIN peerids ON peers.peer_id_id = peerids.id
-		WHERE info_hash = $1 AND peer_id <> $2 AND event <> $3
-		ORDER BY last_announce DESC LIMIT 1;
+		SELECT
+		    uploaded
+		FROM
+		    peers
+		    LEFT JOIN infohashes ON peers.info_hash_id = infohashes.id
+		    LEFT JOIN peerids ON peers.peer_id_id = peerids.id
+		WHERE
+		    info_hash = $1
+		    AND peer_id <> $2
+		    AND event <> $3
+		ORDER BY
+		    last_announce DESC
+		LIMIT 1
 		`,
 		announce.Info_hash, announce.Peer_id, config.Stopped).Scan(&last_uploaded)
 	if err != nil {
@@ -181,9 +188,10 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	// which I hope will be useful in the future to detect cheating.
 	_, err = conf.Dbpool.Exec(context.Background(), `
 		INSERT INTO peerids (peer_id, peer_max_upload)
-		VALUES ($1, $2)
+		    VALUES ($1, $2)
 		ON CONFLICT (peer_id)
-		DO UPDATE SET peer_max_upload = GREATEST(peerids.peer_max_upload, $2);
+		    DO UPDATE SET
+			peer_max_upload = GREATEST (peerids.peer_max_upload, $2)
 		`,
 		announce.Peer_id, upload_change)
 	if err != nil {
@@ -193,7 +201,12 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	// Update infohashes table on completed event.
 	if announce.Event == config.Completed {
 		_, err = conf.Dbpool.Exec(context.Background(), `
-			UPDATE infohashes SET downloaded = downloaded + 1 WHERE info_hash = $1
+			UPDATE
+			    infohashes
+			SET
+			    downloaded = downloaded + 1
+			WHERE
+			    info_hash = $1
 			`,
 			announce.Info_hash)
 		if err != nil {
@@ -204,12 +217,27 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	// Update peers table
 	_, err = conf.Dbpool.Exec(context.Background(), `
 		INSERT INTO peers (peer_id_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
-		SELECT peerids.id, infohashes.id, $3, $4, $5, $6, $7
-		FROM infohashes
-		JOIN peerids on peerids.peer_id = $1
-		WHERE infohashes.info_hash = $2
-		ON CONFLICT (peer_id_id, info_hash_id)
-		DO UPDATE SET ip_port = $3, amount_left = $4, uploaded = $5, downloaded = $6, event = $7;
+		SELECT
+		    peerids.id,
+		    infohashes.id,
+		    $3,
+		    $4,
+		    $5,
+		    $6,
+		    $7
+		FROM
+		    infohashes
+		    JOIN peerids ON peerids.peer_id = $1
+		WHERE
+		    infohashes.info_hash = $2
+		ON CONFLICT (peer_id_id,
+		    info_hash_id)
+		    DO UPDATE SET
+			ip_port = $3,
+			amount_left = $4,
+			uploaded = $5,
+			downloaded = $6,
+			event = $7
 		`,
 		announce.Peer_id, announce.Info_hash, announce.Ip_port, announce.Amount_left, announce.Uploaded, announce.Downloaded, announce.Event)
 	if err != nil {
@@ -233,12 +261,20 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 // https://github.com/jackc/pgx/issues/1043
 func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) error {
 	query := fmt.Sprintf(`
-		SELECT DISTINCT ON (peer_id) ip_port
-		FROM peers
-		JOIN peerids ON peers.peer_id_id = peerids.id
-		JOIN infohashes ON peers.info_hash_id = infohashes.id
-		WHERE info_hash = $1 AND peer_id <> $2 AND last_announce >= NOW() - INTERVAL '%s' AND event <> $3
-		ORDER BY peer_id, last_announce DESC;
+		SELECT DISTINCT ON (peer_id)
+		    ip_port
+		FROM
+		    peers
+		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN infohashes ON peers.info_hash_id = infohashes.id
+		WHERE
+		    info_hash = $1
+		    AND peer_id <> $2
+		    AND last_announce >= NOW() - INTERVAL '%s'
+		    AND event <> $3
+		ORDER BY
+		    peer_id,
+		    last_announce DESC
 		`,
 		interval)
 	rows, err := conf.Dbpool.Query(context.Background(), query, a.Info_hash, a.Peer_id, config.Stopped)

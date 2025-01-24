@@ -55,7 +55,10 @@ func seedNTorrents(conf config.Config, n int, peer_id string) []testutils.Reques
 	for i := range n {
 		info_hash := make([]byte, 20)
 		_, _ = rand.Read(info_hash)
-		_, err := conf.Dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);`, info_hash, fmt.Sprintf("test infohash %d", i))
+		_, err := conf.Dbpool.Exec(context.Background(), `
+			INSERT INTO infohashes (info_hash, name)
+			    VALUES ($1, $2)
+			`, info_hash, fmt.Sprintf("test infohash %d", i))
 		if err != nil {
 			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
 		}
@@ -103,7 +106,12 @@ func TestDownloadedIncrement(t *testing.T) {
 	var downloaded int
 
 	err := conf.Dbpool.QueryRow(context.Background(), `
-		SELECT downloaded FROM infohashes WHERE info_hash = $1;
+		SELECT
+		    downloaded
+		FROM
+		    infohashes
+		WHERE
+		    info_hash = $1
 		`,
 		request.Info_hash).Scan(&downloaded)
 	if err != nil {
@@ -544,11 +552,16 @@ func TestAnnounceWrite(t *testing.T) {
 	var last_announce time.Time
 
 	err := conf.Dbpool.QueryRow(context.Background(), `
-		SELECT peer_id, ip_port, info_hash, last_announce
-		FROM peers
-		JOIN peerids ON peers.peer_id_id = peerids.id
-		JOIN infohashes ON peers.info_hash_id = infohashes.id
-		LIMIT 1;
+		SELECT
+		    peer_id,
+		    ip_port,
+		    info_hash,
+		    last_announce
+		FROM
+		    peers
+		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN infohashes ON peers.info_hash_id = infohashes.id
+		LIMIT 1
 		`).Scan(&peer_id, &ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)

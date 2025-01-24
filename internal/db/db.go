@@ -32,14 +32,14 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// an optional license (for verification, moderation, and search).
 	_, err := dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS infohashes (
-			id SERIAL PRIMARY KEY,
-			info_hash BYTEA NOT NULL UNIQUE,
-			downloaded INTEGER DEFAULT 0 NOT NULL,
-			name TEXT NOT NULL,
-			license TEXT
+		    id serial PRIMARY KEY,
+		    info_hash bytea NOT NULL UNIQUE,
+		    downloaded integer DEFAULT 0 NOT NULL,
+		    name text NOT NULL,
+		    license text
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes(info_hash);
+		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes (info_hash);
 		`)
 	if err != nil {
 		return fmt.Errorf("unable to create infohashes table: %w", err)
@@ -53,12 +53,12 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		DROP TABLE IF EXISTS peerids CASCADE;
 
 		CREATE TABLE IF NOT EXISTS peerids (
-			id SERIAL PRIMARY KEY,
-			peer_id BYTEA NOT NULL UNIQUE,
-			peer_max_upload INTEGER DEFAULT 0 NOT NULL
+		    id serial PRIMARY KEY,
+		    peer_id bytea NOT NULL UNIQUE,
+		    peer_max_upload integer DEFAULT 0 NOT NULL
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_peer_id ON peerids(peer_id);
+		CREATE INDEX IF NOT EXISTS idx_peer_id ON peerids (peer_id);
 		`)
 	if err != nil {
 		return fmt.Errorf("unable to create peerids table: %w", err)
@@ -72,33 +72,33 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		DROP TABLE IF EXISTS peers;
 
 		CREATE TABLE IF NOT EXISTS peers (
-			id SERIAL PRIMARY KEY,
-			peer_id_id INTEGER references peerids(id),
-			ip_port BYTEA NOT NULL,
-			info_hash_id INTEGER references infohashes(id),
-			amount_left INTEGER NOT NULL,
-			downloaded INTEGER NOT NULL,
-			uploaded INTEGER NOT NULL,
-			event INTEGER,
-			last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-			UNIQUE (peer_id_id, info_hash_id)
+		    id serial PRIMARY KEY,
+		    peer_id_id integer REFERENCES peerids (id),
+		    ip_port bytea NOT NULL,
+		    info_hash_id integer REFERENCES infohashes (id),
+		    amount_left integer NOT NULL,
+		    downloaded integer NOT NULL,
+		    uploaded integer NOT NULL,
+		    event INTEGER,
+		    last_announce timestamptz NOT NULL DEFAULT NOW(),
+		    UNIQUE (peer_id_id, info_hash_id)
 		);
 
-
-
-		CREATE OR REPLACE FUNCTION trigger_set_timestamp()
-		RETURNS TRIGGER AS $$
+		CREATE OR REPLACE FUNCTION trigger_set_timestamp ()
+		    RETURNS TRIGGER
+		    AS $$
 		BEGIN
-			NEW.last_announce = NOW();
-			RETURN NEW;
+		    NEW.last_announce = NOW();
+		    RETURN NEW;
 		END;
-		$$ LANGUAGE plpgsql;
+		$$
+		LANGUAGE plpgsql;
 
 		CREATE OR REPLACE TRIGGER set_timestamp
-		BEFORE UPDATE ON peers
-		FOR EACH ROW
-		EXECUTE PROCEDURE trigger_set_timestamp();
-	`)
+		    BEFORE UPDATE ON peers
+		    FOR EACH ROW
+		    EXECUTE PROCEDURE trigger_set_timestamp ();
+		`)
 	if err != nil {
 		return fmt.Errorf("unable to create peers table: %w", err)
 	}

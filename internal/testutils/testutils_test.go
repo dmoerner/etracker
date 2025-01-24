@@ -10,7 +10,13 @@ import (
 func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 	var tableExists bool
 	err := dbpool.QueryRow(context.Background(), `
-		SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = $1);
+		SELECT
+		    EXISTS (
+			SELECT
+			FROM
+			    pg_tables
+			WHERE
+			    tablename = $1)
 		`,
 		tablename).Scan(&tableExists)
 
@@ -33,7 +39,7 @@ func TestTables(t *testing.T) {
 			t.Fatalf("%s table does not exist", table)
 		}
 
-		_, err = conf.Dbpool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+" CASCADE;")
+		_, err = conf.Dbpool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+" CASCADE")
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

@@ -86,7 +86,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	// Although infohashes table normally persists, for testing it should be
 	// recreated each time.
 	_, err = dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS infohashes CASCADE;
+		DROP TABLE IF EXISTS infohashes CASCADE
 		`)
 	if err != nil {
 		log.Fatalf("Unable to clean up old infohashes table")
@@ -97,19 +97,10 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 		log.Fatalf("Unable to initialize DB: %v", err)
 	}
 
-	// // Postgres does not support create database if not exists, so we use a subquery.
-	// _, err = dbpool.Exec(context.Background(),
-	// 	`
-	// 	SELECT 'CREATE DATABASE etracker_test'
-	// 	WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'etracker_test')\gexec
-	// 	`)
-	// if err != nil {
-	// 	log.Fatalf("unable to create test database: %v", err)
-	// }
-	//
 	for _, v := range AllowedInfoHashes {
 		_, err = dbpool.Exec(context.Background(), `
-			INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);
+			INSERT INTO infohashes (info_hash, name)
+			    VALUES ($1, $2)
 			`,
 			v,
 			string(v))
@@ -129,19 +120,19 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 
 func TeardownTest(conf config.Config) {
 	_, err := conf.Dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peers;
+		DROP TABLE IF EXISTS peers
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS infohashes;
+		DROP TABLE IF EXISTS infohashes
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peerids;
+		DROP TABLE IF EXISTS peerids
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)

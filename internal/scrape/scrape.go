@@ -34,16 +34,35 @@ func abortScrape(w http.ResponseWriter, reason string) {
 func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// info_hashes, ok := r.URL.Query()["info_hash"]
-		query := fmt.Sprintf(
-			`WITH recent_announces AS (
-			SELECT DISTINCT ON (peer_id_id) amount_left, info_hash_id FROM peers
-			WHERE last_announce >= NOW() - INTERVAL '%s' AND event <> $1
-			ORDER BY peer_id_id, last_announce DESC
+		query := fmt.Sprintf(`
+			WITH recent_announces AS (
+			    SELECT DISTINCT ON (peer_id_id)
+				amount_left,
+				info_hash_id
+			    FROM
+				peers
+			    WHERE
+				last_announce >= NOW() - INTERVAL '%s'
+				AND event <> $1
+			    ORDER BY
+				peer_id_id,
+				last_announce DESC
 			)
-			SELECT info_hash, name, downloaded, COUNT(*) FILTER(WHERE recent_announces.amount_left > 0) AS leechers, COUNT(*) FILTER(WHERE recent_announces.amount_left = 0) as seeders FROM infohashes
-			LEFT JOIN recent_announces
-			ON infohashes.id = recent_announces.info_hash_id
-			GROUP BY info_hash, name, downloaded`, "60 minutes")
+			SELECT
+			    info_hash,
+			    name,
+			    downloaded,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left > 0) AS leechers,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left = 0) AS seeders
+			FROM
+			    infohashes
+			    LEFT JOIN recent_announces ON infohashes.id = recent_announces.info_hash_id
+			GROUP BY
+			    info_hash,
+			    name,
+			    downloaded
+			`,
+			"60 minutes")
 		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
 		if err != nil {
 			abortScrape(w, fmt.Sprintf("error fetching information for scrape: %v", err))
