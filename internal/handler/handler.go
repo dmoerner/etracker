@@ -168,11 +168,11 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 		`,
 		announce.Info_hash, announce.Peer_id, config.Stopped).Scan(&last_uploaded)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			upload_change = 0
-		} else {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("error fetching recent announces: %w", err)
 		}
+		// If the select returns no rows, this is the peer's first announce.
+		last_uploaded = 0
 	}
 	upload_change = announce.Uploaded - last_uploaded
 

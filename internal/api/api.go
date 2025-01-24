@@ -97,13 +97,9 @@ func InsertInfoHash(conf config.Config, r *http.Request) (string, error) {
 		[]byte(info_hash), name, license)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			// 23505: duplicate key insertion error code
-			if pgErr.Code == pgerrcode.UniqueViolation {
-				return fmt.Sprintf("info_hash %s already inserted", hex.EncodeToString(info_hash)), fmt.Errorf("unable to insert info_hash: %w", err)
-			} else {
-				return "", fmt.Errorf("unable to insert info_hash: %w", err)
-			}
+		// 23505: duplicate key insertion error code
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return fmt.Sprintf("info_hash %s already inserted", hex.EncodeToString(info_hash)), fmt.Errorf("unable to insert info_hash: %w", err)
 		}
 		return "", fmt.Errorf("unable to insert info_hash: %w", err)
 	}
