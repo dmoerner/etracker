@@ -1,9 +1,10 @@
-package main
+package api
 
 import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"etracker/internal/config"
 	"fmt"
 	"io"
 	"log"
@@ -15,7 +16,7 @@ import (
 
 // Some APIActions may not need to return anything to the hanlder other than
 // report a lack of error. In that case, they return ("", nil).
-type APIAction func(Config, *http.Request) (string, error)
+type APIAction func(config.Config, *http.Request) (string, error)
 
 var ActionsMap map[string]APIAction = map[string]APIAction{
 	"insert_infohash": InsertInfoHash,
@@ -25,7 +26,7 @@ var ActionsMap map[string]APIAction = map[string]APIAction{
 // APIHandler handles requests to the /api endpoint. It requires an appropriate
 // authorization header, which is currently a single secret string managed by
 // an environment variable.
-func APIHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
+func APIHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Verify authorization. An empty authorization value or no key
 		// in the config means API access is forbidden.
@@ -35,7 +36,7 @@ func APIHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if config.authorization == "" || authorization != config.authorization {
+		if conf.Authorization == "" || authorization != conf.Authorization {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}
@@ -51,7 +52,7 @@ func APIHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		reply, err := actionFunc(config, r)
+		reply, err := actionFunc(conf, r)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 		}
@@ -77,7 +78,7 @@ func undigestHex(h string) ([]byte, error) {
 // InsertInfoHash is a function which takes the info_hash from a query and
 // inserts it into the database. It always returns the empty string, and also
 // returns either an error or nil.
-func InsertInfoHash(config Config, r *http.Request) (string, error) {
+func InsertInfoHash(conf config.Config, r *http.Request) (string, error) {
 	// info_hash_hex is required parameter, must be a hex digest.
 	info_hash_hex := r.URL.Query().Get("info_hash")
 
@@ -90,7 +91,7 @@ func InsertInfoHash(config Config, r *http.Request) (string, error) {
 	name := r.URL.Query().Get("name")
 	license := r.URL.Query().Get("license")
 
-	_, err = config.dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(context.Background(), `
 		INSERT INTO infohashes (info_hash, name, license) VALUES ($1, $2, $3);
 		`,
 		[]byte(info_hash), name, license)
@@ -110,7 +111,7 @@ func InsertInfoHash(config Config, r *http.Request) (string, error) {
 	return "", nil
 }
 
-func RemoveInfoHash(config Config, r *http.Request) (string, error) {
+func RemoveInfoHash(conf config.Config, r *http.Request) (string, error) {
 	// info_hash_hex is required parameter, must be a hex digest
 	info_hash_hex := r.URL.Query().Get("info_hash")
 
@@ -120,7 +121,7 @@ func RemoveInfoHash(config Config, r *http.Request) (string, error) {
 	}
 	// info_hash is required parameter
 
-	_, err = config.dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(context.Background(), `
 		DELETE FROM infohashes WHERE info_hash = $1;
 		`,
 		[]byte(info_hash))

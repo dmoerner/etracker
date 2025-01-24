@@ -1,4 +1,4 @@
-package main
+package bencode
 
 import (
 	"bytes"
@@ -10,14 +10,14 @@ import (
 	"strconv"
 	"testing"
 
-	bencode "github.com/jackpal/bencode-go"
+	bencode_go "github.com/jackpal/bencode-go"
 )
 
 func TestFail(t *testing.T) {
 	result := FailureReason("not implemented")
 
 	var expected bytes.Buffer
-	err := bencode.Marshal(&expected, map[string]string{"failure reason": "not implemented"})
+	err := bencode_go.Marshal(&expected, map[string]string{"failure reason": "not implemented"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func reflectExpected(peers [][]byte) []byte {
 		"peers":        string(bytes.Join(peers, []byte(""))),
 	}
 	var expected bytes.Buffer
-	err := bencode.Marshal(&expected, expectedMap)
+	err := bencode_go.Marshal(&expected, expectedMap)
 	if err != nil {
 		log.Fatal(err)
 	}

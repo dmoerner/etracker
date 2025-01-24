@@ -1,12 +1,16 @@
 // A roadmap for the algorithms developed here can be found here:
 // https://moerner.com/posts/brainstorming-peer-distribution-algorithms/
-package main
+package handler
 
 import (
 	"context"
+	"etracker/internal/config"
 	"fmt"
 	"math"
 )
+
+// The current default algorithm.
+var DefaultAlgorithm = PeersForGoodSeeds
 
 // The minimumPeers to return to a peer, and the minimum target goodSeedCount.
 // Must be greater than zero.
@@ -14,8 +18,8 @@ const minimumPeers int = 5
 
 // NumwantPeers is the non-intelligent algorithm which distributes peers up to
 // the number requested by the client, not including themselves.
-func NumwantPeers(config Config, a *Announce) (int, error) {
-	return a.numwant, nil
+func NumwantPeers(conf config.Config, a *config.Announce) (int, error) {
+	return a.Numwant, nil
 }
 
 // PeersForAnnounces, aka "Algorithm 1", gives peers to each client as a
@@ -24,7 +28,7 @@ func NumwantPeers(config Config, a *Announce) (int, error) {
 // A problem with this algorithm is that freeriders can get around limits by always
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
-func PeersForAnnounces(config Config, a *Announce) (int, error) {
+func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 	query := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM peers
@@ -33,15 +37,15 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 		`,
 		interval)
 	var torrentCount int
-	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining announce count: %w", err)
 	}
 
 	var numToGive int
 
-	if torrentCount >= a.numwant {
-		numToGive = a.numwant
+	if torrentCount >= a.Numwant {
+		numToGive = a.Numwant
 	} else {
 		// Make sure even new peers get at least one peer.
 		numToGive = torrentCount + 1
@@ -54,7 +58,7 @@ func PeersForAnnounces(config Config, a *Announce) (int, error) {
 // of the number of torrents they are seeding.
 //
 // A problem with this algorithm is that it does not count partial seeders.
-func PeersForSeeds(config Config, a *Announce) (int, error) {
+func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 	query := fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM peers
@@ -63,15 +67,15 @@ func PeersForSeeds(config Config, a *Announce) (int, error) {
 		`,
 		interval)
 	var torrentCount int
-	err := config.dbpool.QueryRow(context.Background(), query, a.peer_id, stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining seed count: %w", err)
 	}
 
 	var numToGive int
 
-	if torrentCount >= a.numwant {
-		numToGive = a.numwant
+	if torrentCount >= a.Numwant {
+		numToGive = a.Numwant
 	} else {
 		// Make sure peers seeding nothing receive at least one peer.
 		numToGive = torrentCount + 1
@@ -95,8 +99,8 @@ func PeersForSeeds(config Config, a *Announce) (int, error) {
 // clients with long uptime or clients with recent activity. However, this is a
 // necessary limitation of a public tracker algorithm which relies on peer_id's
 // which reset on restart, rather than an unchanging, unique announce URL.
-func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
-	if a.numwant == 0 {
+func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
+	if a.Numwant == 0 {
 		return 0, nil
 	}
 
@@ -108,7 +112,7 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 		ORDER BY info_hash_id, last_announce DESC;
 		`,
 		interval)
-	rows, err := config.dbpool.Query(context.Background(), query, a.peer_id, stopped)
+	rows, err := conf.Dbpool.Query(context.Background(), query, a.Peer_id, config.Stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
 	}
@@ -169,25 +173,25 @@ func PeersForGoodSeeds(config Config, a *Announce) (int, error) {
 		`,
 		interval)
 	var goodSeedCount int
-	err = config.dbpool.QueryRow(context.Background(), query, stopped, minimumPeers).Scan(&goodSeedCount)
+	err = conf.Dbpool.QueryRow(context.Background(), query, config.Stopped, minimumPeers).Scan(&goodSeedCount)
 	if err != nil {
 		return 0, fmt.Errorf("error calculating current swarm seeder counts: %w", err)
 	}
 
-	numToGive := smoothFunction(peerScore, a.numwant, goodSeedCount)
+	numToGive := smoothFunction(peerScore, a.Numwant, goodSeedCount)
 
 	return numToGive, nil
 }
 
 // smoothFunction is a mathematical function from x to y which calculates how
 // many peers to return (y) for a requesting client of score (x). It takes two
-// additional parameters, numWanted, the number of peers requested by the
+// additional parameters, Numwanted, the number of peers requested by the
 // client (an upper bound on y), and goodSeedCount, which is the target value
-// of x at which numWanted peers should be returned.
+// of x at which Numwanted peers should be returned.
 //
 // Written out without types, the function is:
 //
-//	y = minimumPeers + (numWanted - minimumPeers)*tanh(kx)
+//	y = minimumPeers + (Numwanted - minimumPeers)*tanh(kx)
 //
 // where the steepness k is calculated as a function of goodSeedCount.
 func smoothFunction(x, numWanted, goodSeedCount int) int {
@@ -195,7 +199,7 @@ func smoothFunction(x, numWanted, goodSeedCount int) int {
 	// delta must be non-zero
 	delta := 0.1
 
-	// Calculate the steepness k, for x = goodSeedCount, y = numWanted-delta.
+	// Calculate the steepness k, for x = goodSeedCount, y = Numwanted-delta.
 	// Add the delta in the denominator to avoid division by zero.
 	k := math.Atanh((float64(numWanted)-y_int-delta)/(float64(numWanted)-y_int+delta)) / float64(goodSeedCount)
 

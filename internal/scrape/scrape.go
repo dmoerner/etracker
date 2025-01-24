@@ -1,11 +1,13 @@
-package main
+package scrape
 
 import (
 	"context"
+	"etracker/internal/bencode"
+	"etracker/internal/config"
 	"fmt"
 	"net/http"
 
-	bencode "github.com/jackpal/bencode-go"
+	bencode_go "github.com/jackpal/bencode-go"
 )
 
 type Scrape struct {
@@ -23,13 +25,13 @@ type File struct {
 // is an unofficial extension to the scraping protocol. Errors do not need to
 // be logged.
 func abortScrape(w http.ResponseWriter, reason string) {
-	_, _ = w.Write(FailureReason(reason))
+	_, _ = w.Write(bencode.FailureReason(reason))
 }
 
 // ScrapeHandler implements the scrape convention to return information on
 // currently available torrents. For more information, see
 // https://wiki.theory.org/BitTorrentSpecification#Tracker_.27scrape.27_Convention
-func ScrapeHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
+func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// info_hashes, ok := r.URL.Query()["info_hash"]
 		query := fmt.Sprintf(
@@ -42,7 +44,7 @@ func ScrapeHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 			LEFT JOIN recent_announces
 			ON infohashes.id = recent_announces.info_hash_id
 			GROUP BY info_hash, name, downloaded`, "60 minutes")
-		rows, err := config.dbpool.Query(context.Background(), query, stopped)
+		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
 		if err != nil {
 			abortScrape(w, fmt.Sprintf("error fetching information for scrape: %v", err))
 			return
@@ -74,7 +76,7 @@ func ScrapeHandler(config Config) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = bencode.Marshal(w, scrape)
+		err = bencode_go.Marshal(w, scrape)
 		if err != nil {
 			abortScrape(w, "error sending bencoded result")
 			return

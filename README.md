@@ -29,7 +29,7 @@ https://unlicense.org/.
 Podman). The included "docker" directory includes a Dockerfile to build a Docker image. You can build it with a command like the following:
 
 ```bash
-$ podman build --no-cache --pull -f docker/Dockerfile . -t user/etracker
+$ podman build --no-cache --pull -f build/Dockerfile . -t user/etracker
 ```
 
 You can then use Docker or Podman compose (podman-compose >= 1.3.0) to run the
@@ -42,7 +42,12 @@ to provide the appropriate certificates yourself. Self-signed certificates for
 local use can easily be generated with https://go.dev/src/crypto/tls/generate_cert.go
 
 For easy and safe testing, the compose file also includes a configuration for a
-second testing database.
+second testing database. Note that the testing framework is not safe for
+concurrent tests, so tests should e run with:
+
+```
+$ go test -p 1 ./...
+```
 
 # Technical Discussion: Free-Riding
 

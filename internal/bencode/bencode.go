@@ -1,8 +1,10 @@
 // A tracker does not need a full bencode implementation, but only needs to encode
 // error messages and peer list dicts. We therefore implement these two functions,
 // rather than relying on a full library (with reflection) for bencoding.
+//
+// Scraping is still handled by an external library at this time.
 
-package main
+package bencode
 
 import (
 	"bytes"

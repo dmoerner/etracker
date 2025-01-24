@@ -1,6 +1,7 @@
-package main
+package api
 
 import (
+	"etracker/internal/testutils"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,8 @@ import (
 // program to reject all API attempts, including with an empty string in
 // the Authorization Header.
 func TestUnsetAuthorization(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, "")
+	conf := testutils.BuildTestConfig(nil, "")
+	defer testutils.TeardownTest(conf)
 
 	data := []struct {
 		name          string
@@ -20,12 +22,12 @@ func TestUnsetAuthorization(t *testing.T) {
 		authorization string
 		expected      int
 	}{
-		{"normally good api key", "http://example.com:8080/api", defaultAPIKey, http.StatusForbidden},
+		{"normally good api key", "http://example.com:8080/api", testutils.DefaultAPIKey, http.StatusForbidden},
 		{"bad api key", "http://example.com:8080/api", "badapikey", http.StatusForbidden},
 		{"no api key", "http://example.com:8080/api", "", http.StatusBadRequest},
 	}
 
-	handler := APIHandler(config)
+	handler := APIHandler(conf)
 
 	for _, d := range data {
 		t.Run(d.name, func(t *testing.T) {
@@ -39,12 +41,11 @@ func TestUnsetAuthorization(t *testing.T) {
 			}
 		})
 	}
-
-	teardownTest(config)
 }
 
 func TestAuthorizationHeader(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
 	data := []struct {
 		name          string
@@ -53,12 +54,12 @@ func TestAuthorizationHeader(t *testing.T) {
 		expected      int
 	}{
 		// Although this is a good key, with no action the return is 400.
-		{"good api key", "http://example.com:8080/api", defaultAPIKey, http.StatusBadRequest},
+		{"good api key", "http://example.com:8080/api", testutils.DefaultAPIKey, http.StatusBadRequest},
 		{"bad api key", "http://example.com:8080/api", "badapikey", http.StatusForbidden},
 		{"no api key", "http://example.com:8080/api", "", http.StatusBadRequest},
 	}
 
-	handler := APIHandler(config)
+	handler := APIHandler(conf)
 
 	for _, d := range data {
 		t.Run(d.name, func(t *testing.T) {
@@ -74,12 +75,11 @@ func TestAuthorizationHeader(t *testing.T) {
 			}
 		})
 	}
-
-	teardownTest(config)
 }
 
 func TestInsertRemoveInfoHash(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
+	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
 	data := []struct {
 		name          string
@@ -89,14 +89,14 @@ func TestInsertRemoveInfoHash(t *testing.T) {
 		expectedcode  int
 	}{
 		// Inserting a duplicate key
-		{"insert", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", defaultAPIKey, "", http.StatusOK},
-		{"insert dupe", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", defaultAPIKey, "info_hash ffffffffffffffffffffffffffffffffffffffff already inserted", http.StatusBadRequest},
-		{"remove", "http://example.com:8080/api?action=remove_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff", defaultAPIKey, "", http.StatusOK},
-		{"missing action", "http://example.com:8080/api?info_hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", defaultAPIKey, "", http.StatusBadRequest},
-		{"bad infohash", "http://example.com:8080/api?action=insert_infohash&info_hash=a", defaultAPIKey, "", http.StatusBadRequest},
+		{"insert", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", testutils.DefaultAPIKey, "", http.StatusOK},
+		{"insert dupe", "http://example.com:8080/api?action=insert_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff&note=hello", testutils.DefaultAPIKey, "info_hash ffffffffffffffffffffffffffffffffffffffff already inserted", http.StatusBadRequest},
+		{"remove", "http://example.com:8080/api?action=remove_infohash&info_hash=ffffffffffffffffffffffffffffffffffffffff", testutils.DefaultAPIKey, "", http.StatusOK},
+		{"missing action", "http://example.com:8080/api?info_hash=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", testutils.DefaultAPIKey, "", http.StatusBadRequest},
+		{"bad infohash", "http://example.com:8080/api?action=insert_infohash&info_hash=a", testutils.DefaultAPIKey, "", http.StatusBadRequest},
 	}
 
-	handler := APIHandler(config)
+	handler := APIHandler(conf)
 
 	for _, d := range data {
 		t.Run(d.name, func(t *testing.T) {
@@ -117,6 +117,4 @@ func TestInsertRemoveInfoHash(t *testing.T) {
 			}
 		})
 	}
-
-	teardownTest(config)
 }

@@ -1,98 +1,44 @@
-package main
+package handler
 
 import (
 	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"etracker/internal/config"
+	"etracker/internal/testutils"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
-	"github.com/jackpal/bencode-go"
+	bencode "github.com/jackpal/bencode-go"
 )
-
-type Request struct {
-	peer_id    string
-	info_hash  string
-	ip         *string
-	port       int
-	numwant    int
-	uploaded   int
-	downloaded int
-	left       int
-	event      Event
-}
 
 type RequestResponseWrapper struct {
 	request  *http.Request
 	recorder *httptest.ResponseRecorder
 }
 
-var peerids = map[int]string{
-	1: "-TR4060-111111111111",
-	2: "-TR4060-111111111112",
-	3: "-TR4060-111111111113",
-	4: "-TR4060-111111111114",
-	5: "-TR4060-111111111115",
-}
-
-var allowedInfoHashes = map[string]string{
-	"a": "aaaaaaaaaaaaaaaaaaaa",
-	"b": "bbbbbbbbbbbbbbbbbbbb",
-	"c": "cccccccccccccccccccc",
-	"d": "dddddddddddddddddddd",
-}
-
 const (
 	deniedInfoHash = "denydenydenydenydeny"
 )
 
-func formatRequest(request Request) string {
-	announce := fmt.Sprintf(
-		"http://example.com/announce/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
-		url.QueryEscape(request.peer_id),
-		url.QueryEscape(request.info_hash),
-		request.port,
-		request.numwant,
-		request.uploaded,
-		request.downloaded,
-		request.left)
-
-	var event string
-	switch request.event {
-	case stopped:
-		event = "stopped"
-	case started:
-		event = "started"
-	case completed:
-		event = "completed"
-	}
-
-	if event != "" {
-		announce += fmt.Sprintf("&event=%s", event)
-	}
-
-	return announce
-}
-
 // createNSeeders is a helper function which creates n request structs for a
 // specified info_hash. Used to populate the handler with many existing
 // seeders.
-func createNSeeders(n int, info_hash string) []Request {
-	var requests []Request
+func createNSeeders(n int, info_hash string) []testutils.Request {
+	var requests []testutils.Request
 
 	for range n {
 		peer_id := make([]byte, 20)
 		_, _ = rand.Read(peer_id)
-		requests = append(requests, Request{
-			peer_id:   string(peer_id),
-			info_hash: info_hash,
+		requests = append(requests, testutils.Request{
+			Peer_id:   string(peer_id),
+			Info_hash: info_hash,
 		})
 	}
 
@@ -103,19 +49,19 @@ func createNSeeders(n int, info_hash string) []Request {
 // info_hashes to a particular peer_id. This also requires inserting these
 // info_hashes into the allowlist in the test db. Used to mimic good or bad
 // seeding behavior.
-func seedNTorrents(config Config, n int, peer_id string) []Request {
-	var requests []Request
+func seedNTorrents(conf config.Config, n int, peer_id string) []testutils.Request {
+	var requests []testutils.Request
 
 	for i := range n {
 		info_hash := make([]byte, 20)
 		_, _ = rand.Read(info_hash)
-		_, err := config.dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);`, info_hash, fmt.Sprintf("test infohash %d", i))
+		_, err := conf.Dbpool.Exec(context.Background(), `INSERT INTO infohashes (info_hash, name) VALUES ($1, $2);`, info_hash, fmt.Sprintf("test infohash %d", i))
 		if err != nil {
 			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
 		}
-		requests = append(requests, Request{
-			peer_id:   peer_id,
-			info_hash: string(info_hash),
+		requests = append(requests, testutils.Request{
+			Peer_id:   peer_id,
+			Info_hash: string(info_hash),
 		})
 	}
 	return requests
@@ -139,100 +85,100 @@ func countPeersReceived(recorder *httptest.ResponseRecorder) int {
 }
 
 func TestDownloadedIncrement(t *testing.T) {
-	config := buildTestConfig(PeersForSeeds, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	request := Request{
-		peer_id:   peerids[1],
-		info_hash: allowedInfoHashes["a"],
-		event:     completed,
+	request := testutils.Request{
+		Peer_id:   testutils.Peerids[1],
+		Info_hash: testutils.AllowedInfoHashes["a"],
+		Event:     config.Completed,
 	}
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
-	req := httptest.NewRequest("GET", formatRequest(request), nil)
+	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
 	w := httptest.NewRecorder()
 	handler(w, req)
 
 	var downloaded int
 
-	err := config.dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(context.Background(), `
 		SELECT downloaded FROM infohashes WHERE info_hash = $1;
 		`,
-		request.info_hash).Scan(&downloaded)
+		request.Info_hash).Scan(&downloaded)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}
 
 	if downloaded != 1 {
-		t.Errorf("expected %d downloads for info_hash %v, got %d", 1, request.info_hash, downloaded)
+		t.Errorf("expected %d downloads for info_hash %v, got %d", 1, request.Info_hash, downloaded)
 	}
 }
 
 // TODO: Refactor these tests to not rely on fragile indexing into a slice.
 func TestPeersForSeeds(t *testing.T) {
-	config := buildTestConfig(PeersForSeeds, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
 	// Setup: A client with three seeds requesting three peers gets three.
 	// A client with no seeds requesting three peers gets one.
-	requests := []Request{
+	requests := []testutils.Request{
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["a"],
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["a"],
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["b"],
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["b"],
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["c"],
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["c"],
 		},
 		{
-			peer_id:   peerids[3],
-			info_hash: allowedInfoHashes["d"],
+			Peer_id:   testutils.Peerids[3],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[4],
-			info_hash: allowedInfoHashes["d"],
+			Peer_id:   testutils.Peerids[4],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[5],
-			info_hash: allowedInfoHashes["d"],
+			Peer_id:   testutils.Peerids[5],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["d"],
-			left:      100,
-			numwant:   3,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["d"],
+			Left:      100,
+			Numwant:   3,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["d"],
-			left:      100,
-			numwant:   3,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["d"],
+			Left:      100,
+			Numwant:   3,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["b"],
-			numwant:   1,
-			left:      100,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["b"],
+			Numwant:   1,
+			Left:      100,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["c"],
-			numwant:   1,
-			left:      100,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["c"],
+			Numwant:   1,
+			Left:      100,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
@@ -261,37 +207,34 @@ func TestPeersForSeeds(t *testing.T) {
 }
 
 func TestStopped(t *testing.T) {
-	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForAnnounces, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	requests := []Request{
+	requests := []testutils.Request{
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
-			event:     stopped,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
+			Event:     config.Stopped,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
@@ -316,31 +259,31 @@ func TestStopped(t *testing.T) {
 // total torrents seeding. The expectations for this test are set by the values
 // encoded in algorithms.go.
 func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
-	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForGoodSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
 	// Populate 50 seeders
-	seeders := createNSeeders(50, allowedInfoHashes["a"])
+	seeders := createNSeeders(50, testutils.AllowedInfoHashes["a"])
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range seeders {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		handler(w, req)
 	}
 
 	// Test bad seeder, they are not currently in the swarm.
-	badSeederRequest := Request{
-		peer_id:   peerids[1],
-		info_hash: allowedInfoHashes["a"],
-		numwant:   50,
+	badSeederRequest := testutils.Request{
+		Peer_id:   testutils.Peerids[1],
+		Info_hash: testutils.AllowedInfoHashes["a"],
+		Numwant:   50,
 	}
 	badSeederExpected := minimumPeers
 
 	badSeederRecorder := httptest.NewRecorder()
 	handler(badSeederRecorder,
-		httptest.NewRequest("GET", formatRequest(badSeederRequest), nil))
+		httptest.NewRequest("GET", testutils.FormatRequest(badSeederRequest), nil))
 
 	badSeederReceived := countPeersReceived(badSeederRecorder)
 	if badSeederReceived != badSeederExpected {
@@ -348,23 +291,23 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	}
 
 	// Test good seeder, they are the first infohash in seeders.
-	goodSeederRequest := Request{
-		peer_id:   seeders[0].peer_id,
-		info_hash: allowedInfoHashes["a"],
-		numwant:   50,
+	goodSeederRequest := testutils.Request{
+		Peer_id:   seeders[0].Peer_id,
+		Info_hash: testutils.AllowedInfoHashes["a"],
+		Numwant:   50,
 	}
-	goodSeederExpected := goodSeederRequest.numwant
+	goodSeederExpected := goodSeederRequest.Numwant
 
-	goodSeederSeeds := seedNTorrents(config, 5, goodSeederRequest.peer_id)
+	goodSeederSeeds := seedNTorrents(conf, 5, goodSeederRequest.Peer_id)
 	for _, r := range goodSeederSeeds {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		handler(w, req)
 	}
 
 	goodSeederRecorder := httptest.NewRecorder()
 	handler(goodSeederRecorder,
-		httptest.NewRequest("GET", formatRequest(goodSeederRequest), nil))
+		httptest.NewRequest("GET", testutils.FormatRequest(goodSeederRequest), nil))
 
 	goodSeederReceived := countPeersReceived(goodSeederRecorder)
 	if goodSeederReceived != goodSeederExpected {
@@ -377,60 +320,53 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 // all it verifies is that PeersForGoodSeeds works properly when the swarm
 // size is below minimumPeers.
 func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
-	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForGoodSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
 	// Peer 1 is seeding two torrents, but both with ratio > 1,
 	// so can receive all 4 peers.
-	requests := []Request{
+	requests := []testutils.Request{
 		{
-			peer_id:    peerids[1],
-			info_hash:  allowedInfoHashes["a"],
-			port:       6881,
-			uploaded:   2,
-			downloaded: 1,
+			Peer_id:    testutils.Peerids[1],
+			Info_hash:  testutils.AllowedInfoHashes["a"],
+			Uploaded:   2,
+			Downloaded: 1,
 		},
 		{
-			peer_id:    peerids[1],
-			info_hash:  allowedInfoHashes["b"],
-			port:       6881,
-			uploaded:   2,
-			downloaded: 1,
+			Peer_id:    testutils.Peerids[1],
+			Info_hash:  testutils.AllowedInfoHashes["b"],
+			Uploaded:   2,
+			Downloaded: 1,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["d"],
-			port:      6881,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[3],
-			info_hash: allowedInfoHashes["d"],
-			port:      6883,
+			Peer_id:   testutils.Peerids[3],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[4],
-			info_hash: allowedInfoHashes["d"],
-			port:      6883,
+			Peer_id:   testutils.Peerids[4],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[5],
-			info_hash: allowedInfoHashes["d"],
-			port:      6883,
+			Peer_id:   testutils.Peerids[5],
+			Info_hash: testutils.AllowedInfoHashes["d"],
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["d"],
-			port:      6881,
-			numwant:   10,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["d"],
+			Numwant:   10,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
@@ -450,54 +386,48 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 }
 
 func TestPeersForAnnounces(t *testing.T) {
-	config := buildTestConfig(PeersForAnnounces, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForAnnounces, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	requests := []Request{
+	requests := []testutils.Request{
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["b"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["b"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["c"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["c"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[3],
-			info_hash: allowedInfoHashes["a"],
-			port:      6883,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[3],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[4],
-			info_hash: allowedInfoHashes["a"],
-			port:      6883,
-			numwant:   3,
+			Peer_id:   testutils.Peerids[4],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Numwant:   3,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
@@ -518,36 +448,36 @@ func TestPeersForAnnounces(t *testing.T) {
 }
 
 func TestPeerList(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	requests := []Request{
+	requests := []testutils.Request{
 		{
-			peer_id:   peerids[1],
-			info_hash: allowedInfoHashes["a"],
-			port:      6881,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[1],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Port:      6881,
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[2],
-			info_hash: allowedInfoHashes["a"],
-			port:      6882,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[2],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Port:      6882,
+			Numwant:   1,
 		},
 		{
-			peer_id:   peerids[3],
-			info_hash: allowedInfoHashes["a"],
-			port:      6883,
-			numwant:   1,
+			Peer_id:   testutils.Peerids[3],
+			Info_hash: testutils.AllowedInfoHashes["a"],
+			Port:      6883,
+			Numwant:   1,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", formatRequest(r), nil)
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
 		handler(w, req)
@@ -558,25 +488,25 @@ func TestPeerList(t *testing.T) {
 	resp := dummyRequests[lastIndex].recorder
 	numRec := countPeersReceived(resp)
 
-	if numRec != requests[lastIndex].numwant {
-		t.Errorf("expected %d peers, received %d", requests[lastIndex].numwant, numRec)
+	if numRec != requests[lastIndex].Numwant {
+		t.Errorf("expected %d peers, received %d", requests[lastIndex].Numwant, numRec)
 	}
 }
 
 func TestDenylistInfoHash(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	request := Request{
-		peer_id:   peerids[1],
-		info_hash: deniedInfoHash,
-		port:      6881,
+	request := testutils.Request{
+		Peer_id:   testutils.Peerids[1],
+		Info_hash: deniedInfoHash,
+		Port:      6881,
 	}
 
-	req := httptest.NewRequest("GET", formatRequest(request), nil)
+	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	handler(w, req)
 
@@ -592,19 +522,19 @@ func TestDenylistInfoHash(t *testing.T) {
 }
 
 func TestAnnounceWrite(t *testing.T) {
-	config := buildTestConfig(defaultAlgorithm, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	request := Request{
-		peer_id:   peerids[1],
-		info_hash: allowedInfoHashes["a"],
-		port:      6881,
+	request := testutils.Request{
+		Peer_id:   testutils.Peerids[1],
+		Info_hash: testutils.AllowedInfoHashes["a"],
+		Port:      6881,
 	}
 
-	req := httptest.NewRequest("GET", formatRequest(request), nil)
+	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(config)
+	handler := PeerHandler(conf)
 
 	handler(w, req)
 
@@ -613,7 +543,7 @@ func TestAnnounceWrite(t *testing.T) {
 	var info_hash []byte
 	var last_announce time.Time
 
-	err := config.dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(context.Background(), `
 		SELECT peer_id, ip_port, info_hash, last_announce
 		FROM peers
 		JOIN peerids ON peers.peer_id_id = peerids.id
@@ -624,11 +554,11 @@ func TestAnnounceWrite(t *testing.T) {
 		t.Fatalf("error querying test db: %v", err)
 	}
 
-	if !bytes.Equal(peer_id, []byte(request.peer_id)) {
-		t.Errorf("peerid: expected %s, got %s", request.peer_id, peer_id)
+	if !bytes.Equal(peer_id, []byte(request.Peer_id)) {
+		t.Errorf("peerid: expected %s, got %s", request.Peer_id, peer_id)
 	}
-	if !bytes.Equal(info_hash, []byte(request.info_hash)) {
-		t.Errorf("info_hash: expected %s, got %s", request.info_hash, info_hash)
+	if !bytes.Equal(info_hash, []byte(request.Info_hash)) {
+		t.Errorf("info_hash: expected %s, got %s", request.Info_hash, info_hash)
 	}
 
 	var expectedIpPort bytes.Buffer
@@ -636,7 +566,7 @@ func TestAnnounceWrite(t *testing.T) {
 	// For reasons that are unclear to me, httptest.NewRequest ignores httptest.DefaultNewRequest
 	// and hard-codes this IP instead, following RFC 5737.
 	expectedIpPort.Write([]byte(net.ParseIP("192.0.2.1").To4()))
-	binary.Write(&expectedIpPort, binary.BigEndian, uint16(request.port))
+	binary.Write(&expectedIpPort, binary.BigEndian, uint16(request.Port))
 	if !bytes.Equal(ip_port, expectedIpPort.Bytes()) {
 		t.Errorf("ip_port: expected %v, got %v", expectedIpPort.Bytes(), ip_port)
 	}

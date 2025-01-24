@@ -1,6 +1,7 @@
-package main
+package config
 
 import (
+	"etracker/internal/db"
 	"log"
 	"os"
 
@@ -8,21 +9,41 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type Event int
+
+const (
+	_ Event = iota
+	Started
+	Stopped
+	Completed
+)
+
+type Announce struct {
+	Peer_id     []byte
+	Ip_port     []byte
+	Info_hash   []byte
+	Numwant     int
+	Amount_left int
+	Downloaded  int
+	Uploaded    int
+	Event       Event
+}
+
 type PeeringAlgorithm func(config Config, a *Announce) (int, error)
 
 type Config struct {
-	algorithm     PeeringAlgorithm
-	authorization string
-	dbpool        *pgxpool.Pool
-	tls           tlsConfig
+	Algorithm     PeeringAlgorithm
+	Authorization string
+	Dbpool        *pgxpool.Pool
+	Tls           TLSConfig
 }
 
-type tlsConfig struct {
-	certFile string
-	keyFile  string
+type TLSConfig struct {
+	CertFile string
+	KeyFile  string
 }
 
-func BuildConfig() Config {
+func BuildConfig(algorithm PeeringAlgorithm) Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Print("Unable to load .env file, will use existing environment for configuration variables.")
@@ -48,32 +69,30 @@ func BuildConfig() Config {
 		log.Print("ETRACKER_AUTHORIZATION not set in environment.")
 	}
 
-	algorithm := PeersForGoodSeeds
-
-	var tls tlsConfig
+	var tls TLSConfig
 	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
 	keyFile, ok2 := os.LookupEnv("ETRACKER_KEYFILE")
 	if ok1 && ok2 {
-		tls.certFile = certFile
-		tls.keyFile = keyFile
+		tls.CertFile = certFile
+		tls.KeyFile = keyFile
 		log.Print("TLS tracker enabled.")
 	}
 
-	dbpool, err := DbConnect()
+	dbpool, err := db.DbConnect()
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
-	err = DbInitialize(dbpool)
+	err = db.DbInitialize(dbpool)
 	if err != nil {
 		log.Fatalf("Unable to initialize DB: %v", err)
 	}
 
 	config := Config{
-		algorithm:     algorithm,
-		authorization: authorization,
-		dbpool:        dbpool,
-		tls:           tls,
+		Algorithm:     algorithm,
+		Authorization: authorization,
+		Dbpool:        dbpool,
+		Tls:           tls,
 	}
 
 	return config

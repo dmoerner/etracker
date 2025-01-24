@@ -1,16 +1,19 @@
-package main
+package scrape
 
 import (
+	"etracker/internal/config"
+	"etracker/internal/handler"
+	"etracker/internal/testutils"
 	"io"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestScrape(t *testing.T) {
-	config := buildTestConfig(PeersForGoodSeeds, defaultAPIKey)
-	defer teardownTest(config)
+	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
 
-	scrapeHandler := ScrapeHandler(config)
+	scrapeHandler := ScrapeHandler(conf)
 
 	request := httptest.NewRequest("GET", "http://example.com/scrape", nil)
 	w := httptest.NewRecorder()
@@ -24,15 +27,15 @@ func TestScrape(t *testing.T) {
 		t.Errorf("expected empty swarm scrape %s, got %s", expected, body)
 	}
 
-	request = httptest.NewRequest("GET", formatRequest(Request{
-		peer_id:   peerids[1],
-		info_hash: allowedInfoHashes["a"],
-		event:     completed,
-		left:      0,
+	request = httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
+		Peer_id:   testutils.Peerids[1],
+		Info_hash: testutils.AllowedInfoHashes["a"],
+		Event:     config.Completed,
+		Left:      0,
 	}), nil)
 	w = httptest.NewRecorder()
 
-	peerHandler := PeerHandler(config)
+	peerHandler := handler.PeerHandler(conf)
 	peerHandler(w, request)
 
 	request = httptest.NewRequest("GET", "http://example.com/scrape", nil)
