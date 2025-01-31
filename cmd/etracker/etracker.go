@@ -9,21 +9,17 @@ import (
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/dmoerner/etracker/internal/handler"
 	"github.com/dmoerner/etracker/internal/scrape"
+	"github.com/dmoerner/etracker/internal/web"
 )
 
 func main() {
 	conf := config.BuildConfig(handler.DefaultAlgorithm)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", web.WebHandler(conf))
 	mux.HandleFunc("/api", api.APIHandler(conf))
 	mux.HandleFunc("/announce", handler.PeerHandler(conf))
 	mux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
-
-	// Rumor has it that some firewalls will block traffic if there is not
-	// a 200 response from the root path.
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
 
 	s := &http.Server{
 		Addr:              ":8080",
