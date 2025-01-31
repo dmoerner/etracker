@@ -38,10 +38,10 @@ func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 		    JOIN peerids ON peers.peer_id_id = peerids.id
 		WHERE
 		    peer_id = $1
-		    AND last_announce >= NOW() - INTERVAL '%s'
+		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		`,
-		interval)
+		config.StaleInterval)
 	var torrentCount int
 	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
 	if err != nil {
@@ -74,10 +74,10 @@ func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 		WHERE
 		    peer_id = $1
 		    AND amount_left = 0
-		    AND last_announce >= NOW() - INTERVAL '%s'
+		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		`,
-		interval)
+		config.StaleInterval)
 	var torrentCount int
 	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
 	if err != nil {
@@ -126,13 +126,13 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    JOIN peerids ON peers.peer_id_id = peerids.id
 		WHERE
 		    peer_id = $1
-		    AND last_announce >= NOW() - INTERVAL '%s'
+		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		ORDER BY
 		    info_hash_id,
 		    last_announce DESC
 		`,
-		interval)
+		config.StaleInterval)
 	rows, err := conf.Dbpool.Query(context.Background(), query, a.Peer_id, config.Stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
@@ -190,7 +190,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 			JOIN peerids ON peers.peer_id_id = peerids.id
 		    WHERE
 			amount_left = 0
-			AND last_announce >= NOW() - INTERVAL '%s'
+			AND last_announce >= NOW() - INTERVAL '%d seconds'
 			AND event <> $1
 		    GROUP BY
 			peerids.id
@@ -200,7 +200,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		FROM
 		    seed_counts
 		`,
-		interval)
+		config.StaleInterval)
 	var goodSeedCount int
 	err = conf.Dbpool.QueryRow(context.Background(), query, config.Stopped, minimumPeers).Scan(&goodSeedCount)
 	if err != nil {

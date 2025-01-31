@@ -18,8 +18,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const interval = "60 minutes"
-
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
 // 6-byte compact format expected by BEP 23. The port used is extracted from
 // the client announce; the RemoteAddr port is ignored.
@@ -271,13 +269,13 @@ func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) er
 		WHERE
 		    info_hash = $1
 		    AND peer_id <> $2
-		    AND last_announce >= NOW() - INTERVAL '%s'
+		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $3
 		ORDER BY
 		    peer_id,
 		    last_announce DESC
 		`,
-		interval)
+		config.StaleInterval)
 	rows, err := conf.Dbpool.Query(context.Background(), query, a.Info_hash, a.Peer_id, config.Stopped)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)

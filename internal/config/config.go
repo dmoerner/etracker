@@ -19,6 +19,12 @@ const (
 	Completed
 )
 
+const (
+	Interval      = 2700 // 45 minutes
+	StaleInterval = 2 * Interval
+	MinInterval   = 30 // 30 seconds
+)
+
 type Announce struct {
 	Peer_id     []byte
 	Ip_port     []byte

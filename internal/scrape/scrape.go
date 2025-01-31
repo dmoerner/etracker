@@ -44,7 +44,7 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 			    FROM
 				peers
 			    WHERE
-				last_announce >= NOW() - INTERVAL '%s'
+				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
 				peer_id_id,
@@ -64,7 +64,7 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 			    name,
 			    downloaded
 			`,
-			"60 minutes")
+			config.StaleInterval)
 		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
 		if err != nil {
 			log.Printf("Error fetching data for scrape: %v", err)

@@ -10,11 +10,8 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-)
 
-const (
-	Interval     = "2700" // 45 minutes
-	Min_Interval = "30"   // 30 seconds
+	"github.com/dmoerner/etracker/internal/config"
 )
 
 // FailureReason generates a bencoded failure reason from a string.
@@ -32,12 +29,14 @@ func FailureReason(msg string) []byte {
 // For more information, see BEP 23.
 func PeerList(peers [][]byte) []byte {
 	joinedPeers := bytes.Join(peers, []byte(""))
+	intervalString := fmt.Sprintf("%d", config.Interval)
+	minIntervalString := fmt.Sprintf("%d", config.MinInterval)
 	var bencoded bytes.Buffer
 	_, err := fmt.Fprintf(&bencoded, "d8:interval%d:%s12:min interval%d:%s5:peers%d:%se",
-		len(Interval),
-		Interval,
-		len(Min_Interval),
-		Min_Interval,
+		len(intervalString),
+		intervalString,
+		len(minIntervalString),
+		minIntervalString,
 		len(joinedPeers),
 		joinedPeers)
 	if err != nil {
