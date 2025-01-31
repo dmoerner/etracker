@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"html/template"
 	"log"
@@ -9,6 +10,9 @@ import (
 
 	"github.com/dmoerner/etracker/internal/config"
 )
+
+//go:embed template/index.html
+var indexTemplate string
 
 type IndexStats struct {
 	HashCount int
@@ -24,7 +28,7 @@ func WebHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		tmpl, err := template.ParseFiles("../../web/template/index.html")
+		tmpl, err := template.New("index").Parse(indexTemplate)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "500: Internal server error")
