@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/dmoerner/etracker/internal/db"
 
@@ -23,6 +24,9 @@ const (
 	Interval      = 2700 // 45 minutes
 	StaleInterval = 2 * Interval
 	MinInterval   = 30 // 30 seconds
+
+	DefaultPort    = 8080
+	DefaultTlsPort = 8443
 )
 
 type Announce struct {
@@ -42,12 +46,14 @@ type Config struct {
 	Algorithm     PeeringAlgorithm
 	Authorization string
 	Dbpool        *pgxpool.Pool
+	Port          int
 	Tls           TLSConfig
 }
 
 type TLSConfig struct {
 	CertFile string
 	KeyFile  string
+	TlsPort  int
 }
 
 func BuildConfig(algorithm PeeringAlgorithm) Config {
@@ -76,10 +82,29 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		log.Print("ETRACKER_AUTHORIZATION not set in environment.")
 	}
 
+	port := DefaultPort
+	if envPort, ok := os.LookupEnv("ETRACKER_PORT"); ok {
+		port, err = strconv.Atoi(envPort)
+		if err != nil {
+			log.Print("Unable to parse ETRACKER_PORT")
+			port = DefaultPort
+		}
+	}
+
+	tlsPort := DefaultTlsPort
+	if envTlsPort, ok := os.LookupEnv("ETRACKER_TLS_PORT"); ok {
+		tlsPort, err = strconv.Atoi(envTlsPort)
+		if err != nil {
+			log.Print("Unable to parse ETRACKER_TLS_PORT")
+			tlsPort = DefaultTlsPort
+		}
+	}
+
 	var tls TLSConfig
 	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
 	keyFile, ok2 := os.LookupEnv("ETRACKER_KEYFILE")
 	if ok1 && ok2 {
+		tls.TlsPort = tlsPort
 		tls.CertFile = certFile
 		tls.KeyFile = keyFile
 		log.Print("TLS tracker enabled.")
@@ -99,6 +124,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		Algorithm:     algorithm,
 		Authorization: authorization,
 		Dbpool:        dbpool,
+		Port:          port,
 		Tls:           tls,
 	}
 

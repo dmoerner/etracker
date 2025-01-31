@@ -10,6 +10,8 @@ services:
       ETRACKER_AUTHORIZATION: mysecretapikey
       # ETRACKER_CERTFILE=/certs/cert.pem
       # ETRACKER_KEYFILE=/certs/key.pem
+      # ETRACKER_PORT=8080
+      # ETRACKER_TLS_PORT=8443
     # volumes:
     #   - ../not-committed/certs:/certs:z
     depends_on:

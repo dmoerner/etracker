@@ -34,13 +34,13 @@
 			const domain = window.location.hostname;
 
 			const httpLink = document.getElementById('httpTracker');
-			const httpAnnounce = 'http://' + domain + ':8080/announce';
+			const httpAnnounce = 'http://' + domain + ':{{.Port}}/announce';
 			httpLink.href = httpAnnounce;
 			httpLink.textContent = httpAnnounce;
 
 			{{if .Tls}}
 			const httpsLink = document.getElementById('httpsTracker');
-			const httpsAnnounce = 'https://' + domain + ':8443/announce';
+			const httpsAnnounce = 'https://' + domain + ':{{.TlsPort}}/announce';
 			httpsLink.href = httpsAnnounce;
 			httpsLink.textContent = httpsAnnounce + ' (recommended)';
 			{{- end}}

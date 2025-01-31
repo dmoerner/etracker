@@ -19,6 +19,8 @@ type IndexStats struct {
 	Seeders   int
 	Leechers  int
 	Tls       bool
+	Port      int
+	TlsPort   int
 }
 
 func WebHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +41,11 @@ func WebHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request)
 		// Populate instance of IndexStats struct.
 		var stats IndexStats
 
+		stats.Port = conf.Port
+
 		if conf.Tls != (config.TLSConfig{}) {
 			stats.Tls = true
+			stats.TlsPort = conf.Tls.TlsPort
 		}
 
 		query := fmt.Sprintf(`
