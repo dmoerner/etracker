@@ -3,43 +3,45 @@ services:
     image: user/etracker:latest
     container_name: etracker
     environment:
-      PGHOST: postgres
+      PGHOST: etracker_pg
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
       PGDATABASE: etracker
-      # ETRACKER_AUTHORIZATION: mysecretapikey
+      ETRACKER_AUTHORIZATION: mysecretapikey
       # ETRACKER_CERTFILE=/certs/cert.pem
       # ETRACKER_KEYFILE=/certs/key.pem
     # volumes:
     #   - ../not-committed/certs:/certs:z
     depends_on:
-      db:
+      etracker_pg:
         condition: service_healthy
     ports:
       - 8080:8080
       # - 8443:8443
 
-  db:
+  etracker_pg:
     image: postgres:17
-    container_name: postgres
+    container_name: etracker_pg
     environment:
       POSTGRES_USER: ${PGUSER}
       POSTGRES_PASSWORD: ${PGPASSWORD}
       POSTGRES_DB: etracker
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+    ports:
+      - 5432:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  db_test:
+  etracker_pg_test:
     image: postgres:17
-    container_name: postgres_test
+    container_name: etracker_pg_test
     environment:
       POSTGRES_USER: ${PGUSER}
       POSTGRES_PASSWORD: ${PGPASSWORD}
       POSTGRES_DB: etracker_test
     ports:
-      - 5432:5432
+      - 5431:5432
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
 

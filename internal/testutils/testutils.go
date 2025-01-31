@@ -76,7 +76,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 		log.Fatal("PGPASSWORD not set in environment")
 	}
 	os.Setenv("PGDATABASE", "etracker_test")
-	os.Setenv("PGPORT", "5432")
+	os.Setenv("PGPORT", "5431")
 	os.Setenv("PGHOST", "localhost")
 
 	dbpool, err := db.DbConnect()
