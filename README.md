@@ -43,10 +43,10 @@ API and to the TLS tracker. For the latter, you will need
 to provide the appropriate certificates yourself. Self-signed certificates for
 local use can easily be generated with https://go.dev/src/crypto/tls/generate_cert.go.
 
-`etracker` uses an allowlist for infohashes. At this time, infohashes can only be added by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header. The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. In the near future API access will be limited to the HTTPS endpoint, but this is not yet implemented, so the following is an example that should only be used locally:
+`etracker` uses an allowlist for infohashes. At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example, and skipping verification for self-signed certificates:
 
 ```bash
-$ python3 scripts/add_infohash.py http://localhost:8080 "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description
+$ python3 scripts/add_infohash.py --noverify https://localhost:8443/api "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description
 ```
 
 `etracker` is written in Go and includes a test suite. If you would like to run the test suite yourself,

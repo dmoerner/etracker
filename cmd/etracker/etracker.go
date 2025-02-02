@@ -18,7 +18,6 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", web.WebHandler(conf))
-	mux.HandleFunc("/api", api.APIHandler(conf))
 	mux.HandleFunc("/announce", handler.PeerHandler(conf))
 	mux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
 
@@ -30,11 +29,17 @@ func main() {
 	}
 
 	if conf.Tls != (config.TLSConfig{}) {
+		tlsMux := http.NewServeMux()
+		tlsMux.HandleFunc("/", web.WebHandler(conf))
+		tlsMux.HandleFunc("/api", api.APIHandler(conf))
+		tlsMux.HandleFunc("/announce", handler.PeerHandler(conf))
+		tlsMux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
+
 		t := &http.Server{
 			Addr:              fmt.Sprintf(":%d", conf.Tls.TlsPort),
 			ReadHeaderTimeout: 5 * time.Second,
 			ReadTimeout:       5 * time.Second,
-			Handler:           http.TimeoutHandler(mux, time.Second, "Timeout"),
+			Handler:           http.TimeoutHandler(tlsMux, time.Second, "Timeout"),
 		}
 
 		go func() {

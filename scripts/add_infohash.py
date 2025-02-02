@@ -16,10 +16,10 @@ def calculate_infohash(filename):
         return hashlib.sha1(bencoder.encode(info_dict)).hexdigest()
 
 
-def add_api(address, apikey, infohash, name):
-    url = f"{address}/api?action=insert_infohash&info_hash={infohash}&name={name}"
+def add_api(noverify, address, apikey, infohash, name):
+    url = f"{address}?action=insert_infohash&info_hash={infohash}&name={name}"
     print(url)
-    r = requests.get(url, headers={"Authorization": apikey})
+    r = requests.get(url, headers={"Authorization": apikey}, verify=not noverify)
     return r.status_code
 
 
@@ -29,6 +29,7 @@ def main():
         description="calculate torrent infohash and add to etracker allowlist",
     )
 
+    parser.add_argument("--noverify", help='Do not verify TLS certificates"')
     parser.add_argument("address", help="etracker address")
     parser.add_argument("apikey", help="etracker api key")
     parser.add_argument("torrentfile", help="path to torrent file")
@@ -41,7 +42,7 @@ def main():
     infohash = calculate_infohash(args.torrentfile)
     print(infohash)
 
-    result = add_api(args.address, args.apikey, infohash, args.name)
+    result = add_api(args.noverify, args.address, args.apikey, infohash, args.name)
     print(result)
 
 
