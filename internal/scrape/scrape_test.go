@@ -11,6 +11,7 @@ import (
 	"github.com/dmoerner/etracker/internal/testutils"
 )
 
+// This test tests both single and multiple query scrapes.
 func TestSpecificScrape(t *testing.T) {
 	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
@@ -39,6 +40,20 @@ func TestSpecificScrape(t *testing.T) {
 	body, _ := io.ReadAll(w.Result().Body)
 
 	expected := "d5:filesd20:aaaaaaaaaaaaaaaaaaaad8:completei1e10:downloadedi1e10:incompletei0e4:name20:aaaaaaaaaaaaaaaaaaaaeee"
+
+	if string(body) != expected {
+		t.Errorf("expected non-empty swarm scrape %s, got %s", expected, body)
+	}
+
+	request = httptest.NewRequest("GET",
+		fmt.Sprintf("http://example.com/scrape?info_hash=%s&info_hash=%s", testutils.AllowedInfoHashes["a"], testutils.AllowedInfoHashes["b"]),
+		nil)
+	w = httptest.NewRecorder()
+	scrapeHandler(w, request)
+
+	body, _ = io.ReadAll(w.Result().Body)
+
+	expected = "d5:filesd20:aaaaaaaaaaaaaaaaaaaad8:completei1e10:downloadedi1e10:incompletei0e4:name20:aaaaaaaaaaaaaaaaaaaae20:bbbbbbbbbbbbbbbbbbbbd8:completei0e10:downloadedi0e10:incompletei0e4:name20:bbbbbbbbbbbbbbbbbbbbeee"
 
 	if string(body) != expected {
 		t.Errorf("expected non-empty swarm scrape %s, got %s", expected, body)
