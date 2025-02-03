@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>etracker Allowlist</title>
+		<link href="css/style.css" rel="stylesheet">
+	</head>
+	<body>
+		<h1>Allowlist</h1>
+
+		<table>
+			<tr>
+				<th>Name</th>
+				<th>Downloaded</th>
+				<th>Seeders</th>
+				<th>Leechers</th>
+				<th>Infohash</th>
+			</tr>
+		{{range .}}
+			<tr>
+				<td>{{.Name}}</td>
+				<td>{{.Downloaded}}</td>
+				<td>{{.Seeders}}</td>
+				<td>{{.Leechers}}</td>
+				<td>{{.Info_hash}}</td>
+			</tr>
+		{{end}}
+		</table>
+
+	</body>
+</html>

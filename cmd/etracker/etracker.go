@@ -18,6 +18,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", web.WebHandler(conf))
+	mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
 	mux.HandleFunc("/announce", handler.PeerHandler(conf))
 	mux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
 
@@ -31,6 +32,7 @@ func main() {
 	if conf.Tls != (config.TLSConfig{}) {
 		tlsMux := http.NewServeMux()
 		tlsMux.HandleFunc("/", web.WebHandler(conf))
+		tlsMux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
 		tlsMux.HandleFunc("/api", api.APIHandler(conf))
 		tlsMux.HandleFunc("/announce", handler.PeerHandler(conf))
 		tlsMux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
