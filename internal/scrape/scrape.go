@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/dmoerner/etracker/internal/bencode"
 	"github.com/dmoerner/etracker/internal/config"
@@ -33,9 +34,13 @@ func abortScrape(w http.ResponseWriter, reason string) {
 // ScrapeHandler implements the scrape convention to return information on
 // currently available torrents. For more information, see
 // https://wiki.theory.org/BitTorrentSpecification#Tracker_.27scrape.27_Convention
+//
+// Query is constructed in three stages, since SQL requires inserting the
+// optional WHERE specification for specific infohashes in the middle of the
+// query.
 func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// info_hashes, ok := r.URL.Query()["info_hash"]
+		// Start constructing query.
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
 			    SELECT DISTINCT ON (peer_id_id)
@@ -59,13 +64,43 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 			FROM
 			    infohashes
 			    LEFT JOIN recent_announces ON infohashes.id = recent_announces.info_hash_id
+			`,
+			config.StaleInterval)
+
+		// This must be type []any to match the signature of pgxpool.Query(), and because
+		// it takes multiple types.
+		var paramsSlice []any
+		paramsSlice = append(paramsSlice, config.Stopped)
+
+		if infoHashes, ok := r.URL.Query()["info_hash"]; ok {
+			query += `WHERE `
+			for idx, info_hash := range infoHashes {
+				if idx > 0 {
+					query += " OR "
+				}
+				unescaped, err := url.QueryUnescape(info_hash)
+				if err != nil {
+					// Errors are skipped, clients have the responsibility to send
+					// proper infohashes.
+					paramsSlice = append(paramsSlice, []byte(""))
+				} else {
+					paramsSlice = append(paramsSlice, []byte(unescaped))
+				}
+				// Slice is zero-indexed, but SQL parameters are one-indexed, and
+				// the first parameter is already taken.
+				query += fmt.Sprintf("info_hash = $%d", idx+2)
+			}
+		}
+
+		query += `
 			GROUP BY
 			    info_hash,
 			    name,
 			    downloaded
-			`,
-			config.StaleInterval)
-		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
+			`
+		// Finished constructing query.
+
+		rows, err := conf.Dbpool.Query(context.Background(), query, paramsSlice...)
 		if err != nil {
 			log.Printf("Error fetching data for scrape: %v", err)
 			abortScrape(w, "error fetching data for scrape")
