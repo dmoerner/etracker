@@ -32,7 +32,7 @@ func TestTrackedInfohashes(t *testing.T) {
 	expected := fmt.Sprintf("Tracked infohashes: %d", len(testutils.AllowedInfoHashes))
 
 	if !strings.Contains(string(data), expected) {
-		t.Errorf("expected \"%s\", got something else", expected)
+		t.Errorf("expected \"%s\", got something else %s", expected, string(data))
 	}
 }
 
