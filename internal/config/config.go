@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -30,14 +33,14 @@ const (
 )
 
 type Announce struct {
-	Peer_id     []byte
-	Ip_port     []byte
-	Info_hash   []byte
-	Numwant     int
-	Amount_left int
-	Downloaded  int
-	Uploaded    int
-	Event       Event
+	Announce_key string
+	Ip_port      []byte
+	Info_hash    []byte
+	Numwant      int
+	Amount_left  int
+	Downloaded   int
+	Uploaded     int
+	Event        Event
 }
 
 type PeeringAlgorithm func(config Config, a *Announce) (int, error)
@@ -54,6 +57,19 @@ type TLSConfig struct {
 	CertFile string
 	KeyFile  string
 	TlsPort  int
+}
+
+const AnnounceKeyLength = 30
+
+// GenerateAnnounceKey creates random, AnnounceKeyLength-character hex announce
+// keys. This has AnnounceKeyLength / 2 bytes of entropy.
+func GenerateAnnounceKey() (string, error) {
+	randomBytes := make([]byte, AnnounceKeyLength/2)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("unable to generate new announce key: %w", err)
+	}
+
+	return hex.EncodeToString(randomBytes), nil
 }
 
 func BuildConfig(algorithm PeeringAlgorithm) Config {

@@ -2,6 +2,7 @@ package testutils
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"log"
 	"net/url"
@@ -20,30 +21,37 @@ var AllowedInfoHashes = map[string]string{
 	"d": "dddddddddddddddddddd",
 }
 
-var Peerids = map[int]string{
-	1: "-TR4060-111111111111",
-	2: "-TR4060-111111111112",
-	3: "-TR4060-111111111113",
-	4: "-TR4060-111111111114",
-	5: "-TR4060-111111111115",
+var AnnounceKeys = map[int]string{
+	1: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	2: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+	3: "cccccccccccccccccccccccccccccc",
+	4: "dddddddddddddddddddddddddddddd",
+	5: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 }
 
 type Request struct {
-	Peer_id    string
-	Info_hash  string
-	Ip         *string
-	Port       int
-	Numwant    int
-	Uploaded   int
-	Downloaded int
-	Left       int
-	Event      config.Event
+	AnnounceKey string
+	Info_hash   string
+	Ip          *string
+	Port        int
+	Numwant     int
+	Uploaded    int
+	Downloaded  int
+	Left        int
+	Event       config.Event
+}
+
+func GeneratePeerID() string {
+	peer_id := make([]byte, 20)
+	_, _ = rand.Read(peer_id)
+	return string(peer_id)
 }
 
 func FormatRequest(request Request) string {
 	announce := fmt.Sprintf(
-		"http://example.com/announce/?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
-		url.QueryEscape(request.Peer_id),
+		"http://example.com/announce/%s?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
+		request.AnnounceKey,
+		url.QueryEscape(GeneratePeerID()),
 		url.QueryEscape(request.Info_hash),
 		request.Port,
 		request.Numwant,
@@ -96,6 +104,17 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	err = db.DbInitialize(dbpool)
 	if err != nil {
 		log.Fatalf("Unable to initialize DB: %v", err)
+	}
+
+	for _, v := range AnnounceKeys {
+		_, err = dbpool.Exec(context.Background(), `
+			INSERT INTO peerids (announce_key)
+			    VALUES ($1)
+			`,
+			v)
+		if err != nil {
+			log.Fatalf("Unable to insert test allowed announce URLs: %v", err)
+		}
 	}
 
 	for _, v := range AllowedInfoHashes {

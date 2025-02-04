@@ -43,7 +43,7 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 		// Start constructing query.
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
-			    SELECT DISTINCT ON (peer_id_id)
+			    SELECT DISTINCT ON (announce_id, info_hash_id)
 				amount_left,
 				info_hash_id
 			    FROM
@@ -52,7 +52,8 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
-				peer_id_id,
+				announce_id,
+				info_hash_id,
 				last_announce DESC
 			)
 			SELECT

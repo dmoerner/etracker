@@ -31,15 +31,25 @@ const (
 // createNSeeders is a helper function which creates n request structs for a
 // specified info_hash. Used to populate the handler with many existing
 // seeders.
-func createNSeeders(n int, info_hash string) []testutils.Request {
+func createNSeeders(conf config.Config, n int, info_hash string) []testutils.Request {
 	var requests []testutils.Request
 
 	for range n {
-		peer_id := make([]byte, 20)
-		_, _ = rand.Read(peer_id)
+		announce_key, err := config.GenerateAnnounceKey()
+		if err != nil {
+			log.Fatalf("createNSeeders: Unable to generate announce keys: %v", err)
+		}
+		_, err = conf.Dbpool.Exec(context.Background(), `
+			INSERT INTO peerids (announce_key)
+			    VALUES ($1)
+			`,
+			announce_key)
+		if err != nil {
+			log.Fatalf("createNSeeders: Unable to insert announce keys: %v", err)
+		}
 		requests = append(requests, testutils.Request{
-			Peer_id:   string(peer_id),
-			Info_hash: info_hash,
+			AnnounceKey: announce_key,
+			Info_hash:   info_hash,
 		})
 	}
 
@@ -47,10 +57,10 @@ func createNSeeders(n int, info_hash string) []testutils.Request {
 }
 
 // seedNTorrents is a helper function which adds n torrents with random
-// info_hashes to a particular peer_id. This also requires inserting these
+// info_hashes to a particular announce_key. This also requires inserting these
 // info_hashes into the allowlist in the test db. Used to mimic good or bad
 // seeding behavior.
-func seedNTorrents(conf config.Config, n int, peer_id string) []testutils.Request {
+func seedNTorrents(conf config.Config, n int, announce_key string) []testutils.Request {
 	var requests []testutils.Request
 
 	for i := range n {
@@ -64,8 +74,8 @@ func seedNTorrents(conf config.Config, n int, peer_id string) []testutils.Reques
 			log.Fatalf("Unable to insert test allowed infohashes: %v", err)
 		}
 		requests = append(requests, testutils.Request{
-			Peer_id:   peer_id,
-			Info_hash: string(info_hash),
+			AnnounceKey: announce_key,
+			Info_hash:   string(info_hash),
 		})
 	}
 	return requests
@@ -93,9 +103,9 @@ func TestDownloadedIncrement(t *testing.T) {
 	defer testutils.TeardownTest(conf)
 
 	request := testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Event:     config.Completed,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Event:       config.Completed,
 	}
 
 	handler := PeerHandler(conf)
@@ -133,64 +143,65 @@ func TestPeersForSeeds(t *testing.T) {
 	// A client with no seeds requesting three peers gets one.
 	requests := []testutils.Request{
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["a"],
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["b"],
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["b"],
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["c"],
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["c"],
 		},
 		{
-			Peer_id:   testutils.Peerids[3],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[3],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[4],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[4],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[5],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[5],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["d"],
-			Left:      100,
-			Numwant:   3,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
+			Left:        100,
+			Numwant:     3,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["d"],
-			Left:      100,
-			Numwant:   3,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
+			Left:        100,
+			Numwant:     3,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["b"],
-			Numwant:   1,
-			Left:      100,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["b"],
+			Numwant:     1,
+			Left:        100,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["c"],
-			Numwant:   1,
-			Left:      100,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["c"],
+			Numwant:     1,
+			Left:        100,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	expected := []struct {
@@ -206,9 +217,6 @@ func TestPeersForSeeds(t *testing.T) {
 		resp := dummyRequests[expected[i].index].recorder
 		numRec := countPeersReceived(resp)
 
-		// Hardcoded for test: We expect that we should receive 1 peer because
-		// we have made announces for 1 torrent, although there are 3 peers
-		// and the peer wanted 3.
 		if numRec != expected[i].expected {
 			t.Errorf("%s expected %d peers, received %d", expected[i].name, expected[i].expected, numRec)
 		}
@@ -221,32 +229,33 @@ func TestStopped(t *testing.T) {
 
 	requests := []testutils.Request{
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
-			Event:     config.Stopped,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
+			Event:       config.Stopped,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -272,55 +281,56 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	defer testutils.TeardownTest(conf)
 
 	// Populate 50 seeders
-	seeders := createNSeeders(50, testutils.AllowedInfoHashes["a"])
+	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range seeders {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	// Test bad seeder, they are not currently in the swarm.
 	badSeederRequest := testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Numwant:   50,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Numwant:     50,
 	}
 	badSeederExpected := minimumPeers
 
 	badSeederRecorder := httptest.NewRecorder()
-	handler(badSeederRecorder,
+	mux.ServeHTTP(badSeederRecorder,
 		httptest.NewRequest("GET", testutils.FormatRequest(badSeederRequest), nil))
 
 	badSeederReceived := countPeersReceived(badSeederRecorder)
 	if badSeederReceived != badSeederExpected {
-		t.Errorf("bad seeder: expected %d seeders, got %d", badSeederExpected, badSeederReceived)
+		t.Errorf("bad seeder: expected %d peers, got %d", badSeederExpected, badSeederReceived)
 	}
 
 	// Test good seeder, they are the first infohash in seeders.
 	goodSeederRequest := testutils.Request{
-		Peer_id:   seeders[0].Peer_id,
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Numwant:   50,
+		AnnounceKey: seeders[0].AnnounceKey,
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Numwant:     50,
 	}
 	goodSeederExpected := goodSeederRequest.Numwant
 
-	goodSeederSeeds := seedNTorrents(conf, 5, goodSeederRequest.Peer_id)
+	goodSeederSeeds := seedNTorrents(conf, 5, goodSeederRequest.AnnounceKey)
 	for _, r := range goodSeederSeeds {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	goodSeederRecorder := httptest.NewRecorder()
-	handler(goodSeederRecorder,
+	mux.ServeHTTP(goodSeederRecorder,
 		httptest.NewRequest("GET", testutils.FormatRequest(goodSeederRequest), nil))
 
 	goodSeederReceived := countPeersReceived(goodSeederRecorder)
 	if goodSeederReceived != goodSeederExpected {
-		t.Errorf("good seeder: expected %d seeders, got %d", goodSeederExpected, goodSeederReceived)
+		t.Errorf("good seeder: expected %d peers, got %d", goodSeederExpected, goodSeederReceived)
 	}
 }
 
@@ -336,49 +346,50 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 	// so can receive all 4 peers.
 	requests := []testutils.Request{
 		{
-			Peer_id:    testutils.Peerids[1],
-			Info_hash:  testutils.AllowedInfoHashes["a"],
-			Uploaded:   2,
-			Downloaded: 1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Uploaded:    2,
+			Downloaded:  1,
 		},
 		{
-			Peer_id:    testutils.Peerids[1],
-			Info_hash:  testutils.AllowedInfoHashes["b"],
-			Uploaded:   2,
-			Downloaded: 1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["b"],
+			Uploaded:    2,
+			Downloaded:  1,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[3],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[3],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[4],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[4],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[5],
-			Info_hash: testutils.AllowedInfoHashes["d"],
+			AnnounceKey: testutils.AnnounceKeys[5],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["d"],
-			Numwant:   10,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["d"],
+			Numwant:     10,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -400,46 +411,47 @@ func TestPeersForAnnounces(t *testing.T) {
 
 	requests := []testutils.Request{
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["b"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["b"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["c"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["c"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[3],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[3],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[4],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Numwant:   3,
+			AnnounceKey: testutils.AnnounceKeys[4],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Numwant:     3,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -462,34 +474,35 @@ func TestPeerList(t *testing.T) {
 
 	requests := []testutils.Request{
 		{
-			Peer_id:   testutils.Peerids[1],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Port:      6881,
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Port:        6881,
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[2],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Port:      6882,
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[2],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Port:        6882,
+			Numwant:     1,
 		},
 		{
-			Peer_id:   testutils.Peerids[3],
-			Info_hash: testutils.AllowedInfoHashes["a"],
-			Port:      6883,
-			Numwant:   1,
+			AnnounceKey: testutils.AnnounceKeys[3],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Port:        6883,
+			Numwant:     1,
 		},
 	}
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		handler(w, req)
+		mux.ServeHTTP(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -507,17 +520,18 @@ func TestDenylistInfoHash(t *testing.T) {
 	defer testutils.TeardownTest(conf)
 
 	request := testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: deniedInfoHash,
-		Port:      6881,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   deniedInfoHash,
+		Port:        6881,
 	}
 
 	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
-	handler(w, req)
+	mux.ServeHTTP(w, req)
 
 	resp := w.Result()
 	data, err := bencode.Decode(resp.Body)
@@ -535,42 +549,38 @@ func TestAnnounceWrite(t *testing.T) {
 	defer testutils.TeardownTest(conf)
 
 	request := testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Port:      6881,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Port:        6881,
 	}
 
 	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(conf)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
 
-	handler(w, req)
+	mux.ServeHTTP(w, req)
 
-	var peer_id []byte
 	var ip_port []byte
 	var info_hash []byte
 	var last_announce time.Time
 
 	err := conf.Dbpool.QueryRow(context.Background(), `
 		SELECT
-		    peer_id,
 		    ip_port,
 		    info_hash,
 		    last_announce
 		FROM
 		    peers
-		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN peerids ON peers.announce_id = peerids.id
 		    JOIN infohashes ON peers.info_hash_id = infohashes.id
 		LIMIT 1
-		`).Scan(&peer_id, &ip_port, &info_hash, &last_announce)
+		`).Scan(&ip_port, &info_hash, &last_announce)
 	if err != nil {
 		t.Fatalf("error querying test db: %v", err)
 	}
 
-	if !bytes.Equal(peer_id, []byte(request.Peer_id)) {
-		t.Errorf("peerid: expected %s, got %s", request.Peer_id, peer_id)
-	}
 	if !bytes.Equal(info_hash, []byte(request.Info_hash)) {
 		t.Errorf("info_hash: expected %s, got %s", request.Info_hash, info_hash)
 	}

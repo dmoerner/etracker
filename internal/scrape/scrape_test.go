@@ -21,10 +21,10 @@ func TestSpecificScrape(t *testing.T) {
 	scrapeHandler := ScrapeHandler(conf)
 
 	request := httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Event:     config.Completed,
-		Left:      0,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Event:       config.Completed,
+		Left:        0,
 	}), nil)
 	w := httptest.NewRecorder()
 
@@ -79,10 +79,10 @@ func TestAllScrape(t *testing.T) {
 	}
 
 	request = httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
-		Peer_id:   testutils.Peerids[1],
-		Info_hash: testutils.AllowedInfoHashes["a"],
-		Event:     config.Completed,
-		Left:      0,
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Event:       config.Completed,
+		Left:        0,
 	}), nil)
 	w = httptest.NewRecorder()
 

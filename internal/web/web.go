@@ -71,7 +71,7 @@ func WebHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request)
 
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
-			    SELECT DISTINCT ON (peer_id_id)
+			    SELECT DISTINCT ON (info_hash_id, announce_id)
 				amount_left,
 				info_hash_id
 			    FROM
@@ -80,7 +80,8 @@ func WebHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request)
 				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
-				peer_id_id,
+				announce_id,
+				info_hash_id,
 				last_announce DESC
 			)
 			SELECT
@@ -128,7 +129,7 @@ func AllowlistHandler(conf config.Config) func(w http.ResponseWriter, r *http.Re
 
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
-			    SELECT DISTINCT ON (peer_id_id)
+			    SELECT DISTINCT ON (announce_id, info_hash_id)
 				amount_left,
 				info_hash_id
 			    FROM
@@ -137,7 +138,8 @@ func AllowlistHandler(conf config.Config) func(w http.ResponseWriter, r *http.Re
 				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
-				peer_id_id,
+				announce_id,
+				info_hash_id,
 				last_announce DESC
 			)
 			SELECT

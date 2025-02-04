@@ -35,15 +35,15 @@ func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 		    COUNT(*)
 		FROM
 		    peers
-		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN peerids ON peers.announce_id = peerids.id
 		WHERE
-		    peer_id = $1
+		    announce_key = $1
 		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		`,
 		config.StaleInterval)
 	var torrentCount int
-	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(context.Background(), query, a.Announce_key, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining announce count: %w", err)
 	}
@@ -70,16 +70,16 @@ func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    COUNT(*)
 		FROM
 		    peers
-		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN peerids ON peers.announce_id = peerids.id
 		WHERE
-		    peer_id = $1
+		    announce_key = $1
 		    AND amount_left = 0
 		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		`,
 		config.StaleInterval)
 	var torrentCount int
-	err := conf.Dbpool.QueryRow(context.Background(), query, a.Peer_id, config.Stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(context.Background(), query, a.Announce_key, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining seed count: %w", err)
 	}
@@ -123,9 +123,9 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    downloaded
 		FROM
 		    peers
-		    JOIN peerids ON peers.peer_id_id = peerids.id
+		    JOIN peerids ON peers.announce_id = peerids.id
 		WHERE
-		    peer_id = $1
+		    announce_key = $1
 		    AND last_announce >= NOW() - INTERVAL '%d seconds'
 		    AND event <> $2
 		ORDER BY
@@ -133,7 +133,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    last_announce DESC
 		`,
 		config.StaleInterval)
-	rows, err := conf.Dbpool.Query(context.Background(), query, a.Peer_id, config.Stopped)
+	rows, err := conf.Dbpool.Query(context.Background(), query, a.Announce_key, config.Stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
 	}
@@ -187,7 +187,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 			COUNT(*) AS seed_count
 		    FROM
 			peers
-			JOIN peerids ON peers.peer_id_id = peerids.id
+			JOIN peerids ON peers.announce_id = peerids.id
 		    WHERE
 			amount_left = 0
 			AND last_announce >= NOW() - INTERVAL '%d seconds'

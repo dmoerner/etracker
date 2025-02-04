@@ -50,15 +50,12 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// statistics to detect cheaters. At the moment, the peer_max_upload
 	// key is written but not read.
 	_, err = dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peerids CASCADE;
-
 		CREATE TABLE IF NOT EXISTS peerids (
 		    id serial PRIMARY KEY,
-		    peer_id bytea NOT NULL UNIQUE,
-		    peer_max_upload integer DEFAULT 0 NOT NULL
+		    announce_key text NOT NULL UNIQUE
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_peer_id ON peerids (peer_id);
+		CREATE INDEX IF NOT EXISTS idx_announce_key ON peerids (announce_key);
 		`)
 	if err != nil {
 		return fmt.Errorf("unable to create peerids table: %w", err)
@@ -69,11 +66,9 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peers;
-
 		CREATE TABLE IF NOT EXISTS peers (
 		    id serial PRIMARY KEY,
-		    peer_id_id integer REFERENCES peerids (id),
+		    announce_id integer references peerids(id),
 		    ip_port bytea NOT NULL,
 		    info_hash_id integer REFERENCES infohashes (id),
 		    amount_left integer NOT NULL,
@@ -81,7 +76,7 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		    uploaded integer NOT NULL,
 		    event INTEGER,
 		    last_announce timestamptz NOT NULL DEFAULT NOW(),
-		    UNIQUE (peer_id_id, info_hash_id)
+		    UNIQUE (announce_id, info_hash_id)
 		);
 
 		CREATE OR REPLACE FUNCTION trigger_set_timestamp ()
