@@ -38,9 +38,10 @@ if __name__ == "__main__":
     y = smooth_function(x, 50, 100)
 
     # Plot the result
+    plt.figure(figsize=(6, 3))
     plt.plot(x, y)
-    plt.xlabel("x")
-    plt.ylabel("f(x)")
+    plt.xlabel("seededTorrents")
+    plt.ylabel("peersToGive")
     plt.title("Smoothed Function")
     plt.grid(True)
     plt.show()
