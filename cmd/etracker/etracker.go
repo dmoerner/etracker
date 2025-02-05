@@ -19,11 +19,11 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", web.WebHandler(conf))
 	mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
-	mux.HandleFunc("/scrape", scrape.ScrapeHandler(conf))
 	// Use improved routing in Go 1.22. Note that this must be tested
 	// by setting up a http.NewServeMux with a matching route.
 	// https://go.dev/blog/routing-enhancements
-	mux.HandleFunc("GET /announce/{id}", handler.PeerHandler(conf))
+	mux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
+	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
 
 	s := &http.Server{
 		Addr:              fmt.Sprintf(":%d", conf.Port),

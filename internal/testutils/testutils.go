@@ -49,7 +49,7 @@ func GeneratePeerID() string {
 
 func FormatRequest(request Request) string {
 	announce := fmt.Sprintf(
-		"http://example.com/announce/%s?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
+		"http://example.com/%s/announce?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
 		request.AnnounceKey,
 		url.QueryEscape(GeneratePeerID()),
 		url.QueryEscape(request.Info_hash),

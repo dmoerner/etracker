@@ -195,7 +195,7 @@ func TestPeersForSeeds(t *testing.T) {
 	var dummyRequests []RequestResponseWrapper
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -249,7 +249,7 @@ func TestStopped(t *testing.T) {
 	var dummyRequests []RequestResponseWrapper
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -284,7 +284,7 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range seeders {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -383,7 +383,7 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 	var dummyRequests []RequestResponseWrapper
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -445,7 +445,7 @@ func TestPeersForAnnounces(t *testing.T) {
 	var dummyRequests []RequestResponseWrapper
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -496,7 +496,7 @@ func TestPeerList(t *testing.T) {
 	var dummyRequests []RequestResponseWrapper
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	for _, r := range requests {
 		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
@@ -529,7 +529,7 @@ func TestDenylistInfoHash(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	mux.ServeHTTP(w, req)
 
@@ -558,7 +558,7 @@ func TestAnnounceWrite(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/announce/{id}", PeerHandler(conf))
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
 
 	mux.ServeHTTP(w, req)
 
