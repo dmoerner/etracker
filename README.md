@@ -46,7 +46,7 @@ local use can easily be generated with https://go.dev/src/crypto/tls/generate_ce
 `etracker` uses an allowlist for infohashes. At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example, and skipping verification for self-signed certificates:
 
 ```bash
-$ python3 scripts/add_infohash.py --noverify https://localhost:8443/api "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description
+$ python3 scripts/add_infohash.py --noverify True https://localhost:8443/api "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description
 ```
 
 `etracker` is written in Go and includes a test suite. If you would like to run the test suite yourself,
@@ -152,6 +152,7 @@ something which clients could eventually handle automatically.
 Blog posts about the development of this tracker will be shared here:
 https://moerner.com.
 
+- Slides from a presentation on `etracker` at the Recurse Center: https://moerner.com/static/presentation-etracker.pdf
 - Benchmarking bencode implementations: https://moerner.com/posts/isnt-go-reflection-slow/
 - Constructing PostgreSQL queries with non-parameterizable placeholders: https://moerner.com/posts/postgresql-parameter-placeholders/
 - Brainstorming peer distribution algorithms: https://moerner.com/posts/brainstorming-peer-distribution-algorithms/
