@@ -26,7 +26,7 @@ https://unlicense.org/.
 # Setup and Installation
 
 `etracker` is designed to work with Docker or Podman. Primary testing is done with
-Podman; podman-compose > 1.3.x is required. 
+Podman; podman-compose > 1.3.x is required.
 
 The included "docker" directory includes a Dockerfile to build a Docker image. Check out the docker file in `build/docker-compose.yml` for configuration options; at a minimum, you will need to export the environmental variables `$PGUSER` and `$PGPASSWORD`. For example, you can build and run it with a command like the following:
 
@@ -43,7 +43,7 @@ API and to the TLS tracker. For the latter, you will need
 to provide the appropriate certificates yourself. Self-signed certificates for
 local use can easily be generated with https://go.dev/src/crypto/tls/generate_cert.go.
 
-`etracker` uses an allowlist for infohashes. At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example, and skipping verification for self-signed certificates:
+By default, `etracker` uses an allowlist for infohashes. You may turn this off by setting the environmental variable `$ETRACKER_DISABLE_ALLOWLIST` to "true". At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example, and skipping verification for self-signed certificates:
 
 ```bash
 $ python3 scripts/add_infohash.py --noverify True https://localhost:8443/api "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description

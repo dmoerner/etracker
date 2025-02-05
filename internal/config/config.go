@@ -46,11 +46,12 @@ type Announce struct {
 type PeeringAlgorithm func(config Config, a *Announce) (int, error)
 
 type Config struct {
-	Algorithm     PeeringAlgorithm
-	Authorization string
-	Dbpool        *pgxpool.Pool
-	Port          int
-	Tls           TLSConfig
+	Algorithm        PeeringAlgorithm
+	Authorization    string
+	Dbpool           *pgxpool.Pool
+	Port             int
+	Tls              TLSConfig
+	DisableAllowlist bool
 }
 
 type TLSConfig struct {
@@ -98,6 +99,11 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		log.Print("ETRACKER_AUTHORIZATION not set in environment.")
 	}
 
+	disableAllowlist := false
+	if envDisableAllowlist, ok := os.LookupEnv("ETRACKER_DISABLE_ALLOWLIST"); ok && envDisableAllowlist == "true" {
+		disableAllowlist = true
+	}
+
 	port := DefaultPort
 	if envPort, ok := os.LookupEnv("ETRACKER_PORT"); ok {
 		port, err = strconv.Atoi(envPort)
@@ -137,11 +143,12 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 	}
 
 	config := Config{
-		Algorithm:     algorithm,
-		Authorization: authorization,
-		Dbpool:        dbpool,
-		Port:          port,
-		Tls:           tls,
+		Algorithm:        algorithm,
+		Authorization:    authorization,
+		Dbpool:           dbpool,
+		Port:             port,
+		Tls:              tls,
+		DisableAllowlist: disableAllowlist,
 	}
 
 	return config

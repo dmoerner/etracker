@@ -133,8 +133,24 @@ func parseAnnounce(r *http.Request) (*config.Announce, error) {
 
 var ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
 
-// checkInfoHash verifies that an announce is on the allowlist.
+// checkInfoHash verifies that an announce is on the allowlist. It returns nil
+// if the infohash is allowed or if DisableAllowlist is true.
 func checkInfoHash(conf config.Config, announce *config.Announce) error {
+	if conf.DisableAllowlist {
+		_, err := conf.Dbpool.Exec(context.Background(), `
+			INSERT INTO infohashes (info_hash, name)
+			    VALUES ($1, $2)
+			ON CONFLICT (info_hash)
+			    DO NOTHING
+			`,
+			announce.Info_hash, "client added")
+		if err != nil {
+			fmt.Println(err)
+			return fmt.Errorf("error inserting announce_key: %w", err)
+		}
+		return nil
+	}
+
 	var b bool
 	err := conf.Dbpool.QueryRow(context.Background(), `
 		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);

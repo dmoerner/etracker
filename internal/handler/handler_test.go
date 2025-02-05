@@ -544,6 +544,49 @@ func TestDenylistInfoHash(t *testing.T) {
 	}
 }
 
+func TestDisableAllowlist(t *testing.T) {
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
+
+	conf.DisableAllowlist = true
+
+	request := testutils.Request{
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   deniedInfoHash,
+		Port:        6881,
+	}
+
+	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
+	w := httptest.NewRecorder()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+
+	mux.ServeHTTP(w, req)
+
+	resp := w.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	if _, ok := data.(map[string]any)["failure reason"]; ok {
+		t.Errorf("received failure reason for unlisted infohash despite disabling allowlist")
+	}
+
+	var found bool
+	err = conf.Dbpool.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1)
+		`, request.Info_hash).Scan(&found)
+	if err != nil {
+		t.Fatalf("error querying test db: %v", err)
+	}
+
+	if !found {
+		t.Errorf("did not find info_hash in infohashes table")
+	}
+}
+
 func TestAnnounceWrite(t *testing.T) {
 	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
