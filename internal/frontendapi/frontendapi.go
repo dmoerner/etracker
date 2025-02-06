@@ -23,15 +23,17 @@ func writeError(w http.ResponseWriter, code int, err error) {
 	log.Printf("Error: %v", err)
 }
 
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+func enableCors(conf config.Config, w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", fmt.Sprintf("http://localhost:%d", conf.Port))
 	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
+// StatsHandler presents a REST API on /frontendapi/stats which returns an object
+// including the total tracked infohashes, seeders, and leechers.
 func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(conf, &w)
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
 			    SELECT DISTINCT ON (info_hash_id, announce_id)
@@ -74,11 +76,6 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		fmt.Fprintf(w, "%s", result)
-	}
-}
-
-func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
