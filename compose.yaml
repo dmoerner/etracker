@@ -25,9 +25,9 @@ services:
     image: postgres:17
     container_name: etracker_pg
     environment:
-      POSTGRES_USER: ${PGUSER}
-      POSTGRES_PASSWORD: ${PGPASSWORD}
-      POSTGRES_DB: etracker
+      - POSTGRES_USER=$PGUSER
+      - POSTGRES_PASSWORD=$PGPASSWORD
+      - POSTGRES_DB=etracker
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
     ports:
