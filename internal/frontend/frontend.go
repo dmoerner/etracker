@@ -23,9 +23,15 @@ func writeError(w http.ResponseWriter, code int, err error) {
 	log.Printf("Error: %v", err)
 }
 
+func enableCors(w *http.ResponseWriter) {
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
+
 func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Print("entering statshandler")
+		enableCors(&w)
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
 			    SELECT DISTINCT ON (info_hash_id, announce_id)
