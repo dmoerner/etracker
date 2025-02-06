@@ -8,6 +8,7 @@ import (
 
 	"github.com/dmoerner/etracker/internal/api"
 	"github.com/dmoerner/etracker/internal/config"
+	"github.com/dmoerner/etracker/internal/frontend"
 	"github.com/dmoerner/etracker/internal/handler"
 	"github.com/dmoerner/etracker/internal/scrape"
 	"github.com/dmoerner/etracker/internal/web"
@@ -16,9 +17,27 @@ import (
 func main() {
 	conf := config.BuildConfig(handler.DefaultAlgorithm)
 
+	frontendMux := http.NewServeMux()
+	frontendMux.HandleFunc("/frontend/stats", frontend.StatsHandler(conf))
+	frontendMux.HandleFunc("/frontend/generate", frontend.GenerateHandler(conf))
+	frontendMux.HandleFunc("/frontend/accept", frontend.AcceptHandler(conf))
+
+	f := &http.Server{
+		Addr:              "localhost:9000",
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		Handler:           http.TimeoutHandler(frontendMux, time.Second, "Timeout"),
+	}
+	go func() {
+		if err := f.ListenAndServe(); err != nil {
+			log.Fatalf("Unable to start frontend endpoint: %v", err)
+		}
+	}()
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", web.WebHandler(conf))
-	mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
+	// mux.HandleFunc("/", web.WebHandler(conf))
+	mux.Handle("/", http.FileServer(http.Dir("./frontend/dist")))
+	// mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
 	// Use improved routing in Go 1.22. Note that this must be tested
 	// by setting up a http.NewServeMux with a matching route.
 	// https://go.dev/blog/routing-enhancements
