@@ -62,7 +62,7 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		result, err := json.Marshal(stats)
+		result, err := json.Marshal(stats[0])
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
