@@ -1,5 +1,5 @@
 import './App.css'
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 
 function About() {
   return (
@@ -16,33 +16,33 @@ function About() {
 
 
 type StatsData = {
-    hashcount: number,
-    seeders: number,
-    leechers: number
+  hashcount: number,
+  seeders: number,
+  leechers: number
 }
 
 
-async function Statistics() {
+function Statistics() {
 
 
 
-    const [data, setData] = useState<StatsData | undefined>(undefined);
+  const [data, setData] = useState<StatsData | undefined>(undefined);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const response = await fetch("/frontend/stats");
-                console.log('fetch stats response', response);
-                const stats = await response.json();
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const response = await fetch("http://localhost:9000/frontend/stats");
+        console.log('fetch stats response', response);
+        const stats = await response.json();
 
-                setData(stats);
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            }
-        };
+        setData(stats);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      }
+    };
 
-        fetchData();
-    }, []);
+    fetchData();
+  }, []);
 
 
   return (
@@ -50,14 +50,14 @@ async function Statistics() {
       <h2>Statistics</h2>
       <ul>
         <li>Tracked Infohashes: {data && data.hashcount}</li>
-        <li>Tracked Infohashes: {data && data.seeders}</li>
-        <li>Tracked Infohashes: {data && data.leechers}</li>
+        <li>Seeders: {data && data.seeders}</li>
+        <li>Leechers: {data && data.leechers}</li>
       </ul>
     </>
   )
 }
 
-async function AnnounceURL() {
+function AnnounceURL() {
   return (
     <>
       <h2>Announce URL</h2>
