@@ -31,7 +31,7 @@ function Statistics() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://localhost:9000/frontend/stats");
+        const response = await fetch("http://localhost:9000/frontendapi/stats");
         console.log('fetch stats response', response);
         const stats = await response.json();
 
