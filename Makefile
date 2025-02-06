@@ -1,4 +1,4 @@
-DOCKER = docker
+DOCKER = podman
 
 # https://stackoverflow.com/a/70663753
 ifneq (,$(wildcard ./.env))
