@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"slices"
 
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/jackc/pgx/v5"
@@ -27,20 +28,25 @@ func writeError(w http.ResponseWriter, code int, err error) {
 	log.Printf("Error: %v", err)
 }
 
-func enableCors(conf config.Config, w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", fmt.Sprintf("http://localhost:%d", conf.Port))
+func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
+	allowed := []string{fmt.Sprintf("http://localhost:%d", conf.Port)}
 	if conf.Tls != (config.TLSConfig{}) {
-		(*w).Header().Set("Access-Control-Allow-Origin", fmt.Sprintf("https://localhost:%d", conf.Tls.TlsPort))
+		allowed = append(allowed, fmt.Sprintf("https://localhost:%d", conf.Tls.TlsPort))
 	}
-	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
-	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	origin := r.Header.Get("Origin")
+	if slices.Contains(allowed, origin) {
+		(*w).Header().Set("Access-Control-Allow-Origin", origin)
+		(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
+		(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	}
 }
 
 // StatsHandler presents a REST API on /frontendapi/stats which returns an object
 // including the total tracked infohashes, seeders, and leechers.
 func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		enableCors(conf, &w)
+		enableCors(conf, &w, r)
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
 			    SELECT DISTINCT ON (info_hash_id, announce_id)
@@ -88,7 +94,7 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 
 func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		enableCors(conf, &w)
+		enableCors(conf, &w, r)
 		announce_key, err := config.GenerateAnnounceKey(conf)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
