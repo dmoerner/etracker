@@ -11,7 +11,6 @@ import (
 	"github.com/dmoerner/etracker/internal/frontendapi"
 	"github.com/dmoerner/etracker/internal/handler"
 	"github.com/dmoerner/etracker/internal/scrape"
-	"github.com/dmoerner/etracker/internal/web"
 )
 
 func main() {
@@ -34,12 +33,9 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	// mux.HandleFunc("/", web.WebHandler(conf))
 	mux.Handle("/", http.FileServer(http.Dir("./frontend/dist")))
 	// mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
-	// Use improved routing in Go 1.22. Note that this must be tested
-	// by setting up a http.NewServeMux with a matching route.
-	// https://go.dev/blog/routing-enhancements
+	// Use improved routing in Go 1.22.
 	mux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
 	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
 
@@ -52,8 +48,7 @@ func main() {
 
 	if conf.Tls != (config.TLSConfig{}) {
 		tlsMux := http.NewServeMux()
-		tlsMux.HandleFunc("/", web.WebHandler(conf))
-		tlsMux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
+		tlsMux.Handle("/", http.FileServer(http.Dir("./frontend/dist")))
 		tlsMux.HandleFunc("/api", api.APIHandler(conf))
 		tlsMux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
 		tlsMux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))

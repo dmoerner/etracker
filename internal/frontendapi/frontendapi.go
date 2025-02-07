@@ -29,6 +29,9 @@ func writeError(w http.ResponseWriter, code int, err error) {
 
 func enableCors(conf config.Config, w *http.ResponseWriter) {
 	(*w).Header().Set("Access-Control-Allow-Origin", fmt.Sprintf("http://localhost:%d", conf.Port))
+	if conf.Tls != (config.TLSConfig{}) {
+		(*w).Header().Set("Access-Control-Allow-Origin", fmt.Sprintf("https://localhost:%d", conf.Tls.TlsPort))
+	}
 	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
