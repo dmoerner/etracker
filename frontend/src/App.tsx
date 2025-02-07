@@ -1,5 +1,7 @@
 import './App.css'
 import AnnounceURL from './AnnounceURL';
+import Header from './Header';
+import { Link } from 'react-router-dom';
 import { useEffect, useState } from "react";
 
 function About() {
@@ -50,7 +52,7 @@ function Statistics() {
     <>
       <h2>Statistics</h2>
       <ul>
-        <li>Tracked Infohashes: {data && data.hashcount}</li>
+        <li><Link to="/infohashes">Tracked Infohashes: {data && data.hashcount}</Link></li>
         <li>Seeders: {data && data.seeders}</li>
         <li>Leechers: {data && data.leechers}</li>
       </ul>
@@ -61,7 +63,7 @@ function Statistics() {
 function App() {
   return (
     <>
-      <h1>etracker</h1>
+      <Header />
       <About />
       <Statistics />
       <AnnounceURL />
