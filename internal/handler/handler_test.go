@@ -35,17 +35,9 @@ func createNSeeders(conf config.Config, n int, info_hash string) []testutils.Req
 	var requests []testutils.Request
 
 	for range n {
-		announce_key, err := config.GenerateAnnounceKey()
+		announce_key, err := config.GenerateAnnounceKey(conf)
 		if err != nil {
 			log.Fatalf("createNSeeders: Unable to generate announce keys: %v", err)
-		}
-		_, err = conf.Dbpool.Exec(context.Background(), `
-			INSERT INTO peerids (announce_key)
-			    VALUES ($1)
-			`,
-			announce_key)
-		if err != nil {
-			log.Fatalf("createNSeeders: Unable to insert announce keys: %v", err)
 		}
 		requests = append(requests, testutils.Request{
 			AnnounceKey: announce_key,

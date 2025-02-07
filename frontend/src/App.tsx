@@ -1,4 +1,5 @@
 import './App.css'
+import AnnounceURL from './AnnounceURL';
 import { useEffect, useState } from "react";
 
 function About() {
@@ -53,16 +54,6 @@ function Statistics() {
         <li>Seeders: {data && data.seeders}</li>
         <li>Leechers: {data && data.leechers}</li>
       </ul>
-    </>
-  )
-}
-
-function AnnounceURL() {
-  return (
-    <>
-      <h2>Announce URL</h2>
-
-      <p>etracker is like a hybrid public/private tracker. Although registration is not required, each user must use a unique announce URL. This allows the tracker to track statistics across sessions and reward good seeders with better peer lists.</p>
     </>
   )
 }

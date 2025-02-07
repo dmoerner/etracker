@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -63,14 +64,26 @@ type TLSConfig struct {
 const AnnounceKeyLength = 30
 
 // GenerateAnnounceKey creates random, AnnounceKeyLength-character hex announce
-// keys. This has AnnounceKeyLength / 2 bytes of entropy.
-func GenerateAnnounceKey() (string, error) {
+// keys. This has AnnounceKeyLength / 2 bytes of entropy. With adequate
+// AnnounceKeyLength we do not need to check for collisions. We also write the
+// new key to the database.
+func GenerateAnnounceKey(conf Config) (string, error) {
 	randomBytes := make([]byte, AnnounceKeyLength/2)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", fmt.Errorf("unable to generate new announce key: %w", err)
 	}
+	key := hex.EncodeToString(randomBytes)
 
-	return hex.EncodeToString(randomBytes), nil
+	_, err := conf.Dbpool.Exec(context.Background(), `
+			INSERT INTO peerids (announce_key)
+			    VALUES ($1)
+			`,
+		key)
+	if err != nil {
+		return "", fmt.Errorf("createNSeeders: Unable to insert announce key: %w", err)
+	}
+
+	return key, nil
 }
 
 func BuildConfig(algorithm PeeringAlgorithm) Config {

@@ -17,6 +17,10 @@ type Stats struct {
 	Leechers  int `json:"leechers"`
 }
 
+type Key struct {
+	Announce_key string `json:"announce_key"`
+}
+
 func writeError(w http.ResponseWriter, code int, err error) {
 	w.WriteHeader(code)
 	fmt.Fprintf(w, "%d", code)
@@ -79,7 +83,21 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func AcceptHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		enableCors(conf, &w)
+		announce_key, err := config.GenerateAnnounceKey(conf)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		key := Key{Announce_key: announce_key}
+
+		result, err := json.Marshal(key)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		fmt.Fprintf(w, "%s", result)
 	}
 }
