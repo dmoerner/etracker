@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/jackc/pgx/v5"
@@ -47,6 +49,39 @@ func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
 		(*w).Header().Set("Access-Control-Allow-Origin", origin)
 		(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
 		(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	}
+}
+
+// Return a pointer to a new http.Server object which will serve the frontendapi.
+func NewFrontendAPIServer(conf config.Config) *http.Server {
+	frontendMux := http.NewServeMux()
+	frontendMux.HandleFunc("/frontendapi/stats", StatsHandler(conf))
+	frontendMux.HandleFunc("/frontendapi/generate", GenerateHandler(conf))
+	frontendMux.HandleFunc("/frontendapi/infohashes", InfohashesHandler(conf))
+
+	f := &http.Server{
+		Addr:              "localhost:9000",
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       5 * time.Second,
+		Handler:           http.TimeoutHandler(frontendMux, time.Second, "Timeout"),
+	}
+	return f
+}
+
+// ServeFrontend provides the basic routing logic for the SPA.
+func ServeFrontend(frontendPath string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fs := http.Dir(frontendPath)
+		path := filepath.Join(r.URL.Path)
+
+		// Serve static assets, if they exist.
+		if _, err := fs.Open(path); err == nil {
+			http.FileServer(fs).ServeHTTP(w, r)
+			return
+		}
+
+		// Route everything else through index.html.
+		http.ServeFile(w, r, filepath.Join(frontendPath, "index.html"))
 	}
 }
 

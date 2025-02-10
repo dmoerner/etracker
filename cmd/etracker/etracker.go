@@ -16,17 +16,8 @@ import (
 func main() {
 	conf := config.BuildConfig(handler.DefaultAlgorithm)
 
-	frontendMux := http.NewServeMux()
-	frontendMux.HandleFunc("/frontendapi/stats", frontendapi.StatsHandler(conf))
-	frontendMux.HandleFunc("/frontendapi/generate", frontendapi.GenerateHandler(conf))
-	frontendMux.HandleFunc("/frontendapi/infohashes", frontendapi.InfohashesHandler(conf))
+	f := frontendapi.NewFrontendAPIServer(conf)
 
-	f := &http.Server{
-		Addr:              "localhost:9000",
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       5 * time.Second,
-		Handler:           http.TimeoutHandler(frontendMux, time.Second, "Timeout"),
-	}
 	go func() {
 		if err := f.ListenAndServe(); err != nil {
 			log.Fatalf("Unable to start frontend endpoint: %v", err)
@@ -34,8 +25,7 @@ func main() {
 	}()
 
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.Dir("./frontend/dist")))
-	// mux.HandleFunc("/allowlist", web.AllowlistHandler(conf))
+	mux.HandleFunc("/", frontendapi.ServeFrontend("./frontend/dist"))
 	// Use improved routing in Go 1.22.
 	mux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
 	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
@@ -49,7 +39,7 @@ func main() {
 
 	if conf.Tls != (config.TLSConfig{}) {
 		tlsMux := http.NewServeMux()
-		tlsMux.Handle("/", http.FileServer(http.Dir("./frontend/dist")))
+		tlsMux.HandleFunc("/", frontendapi.ServeFrontend("./frontend/dist"))
 		tlsMux.HandleFunc("/api", api.APIHandler(conf))
 		tlsMux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
 		tlsMux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
