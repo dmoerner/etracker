@@ -19,6 +19,7 @@ func main() {
 	frontendMux := http.NewServeMux()
 	frontendMux.HandleFunc("/frontendapi/stats", frontendapi.StatsHandler(conf))
 	frontendMux.HandleFunc("/frontendapi/generate", frontendapi.GenerateHandler(conf))
+	frontendMux.HandleFunc("/frontendapi/infohashes", frontendapi.InfohashesHandler(conf))
 
 	f := &http.Server{
 		Addr:              "localhost:9000",
