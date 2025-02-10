@@ -13,7 +13,7 @@ function AnnounceURL() {
   const handleGenerate = () => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://localhost:9000/frontendapi/generate");
+        const response = await fetch(window.location.origin + "/api/generate");
         const key = await response.json();
 
         setAnnounce(key.announce_key)

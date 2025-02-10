@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 
 	"github.com/dmoerner/etracker/internal/db"
 
@@ -29,8 +28,9 @@ const (
 	StaleInterval = 2 * Interval
 	MinInterval   = 30 // 30 seconds
 
-	DefaultPort    = 8080
-	DefaultTlsPort = 8443
+	DefaultHostname = "localhost"
+	DefaultPort     = "8080"
+	DefaultTlsPort  = "8443"
 )
 
 type Announce struct {
@@ -50,15 +50,15 @@ type Config struct {
 	Algorithm        PeeringAlgorithm
 	Authorization    string
 	Dbpool           *pgxpool.Pool
-	Port             int
+	Hostname         string
 	Tls              TLSConfig
 	DisableAllowlist bool
 }
 
 type TLSConfig struct {
-	CertFile string
-	KeyFile  string
-	TlsPort  int
+	CertFile    string
+	KeyFile     string
+	TlsHostname string
 }
 
 const AnnounceKeyLength = 30
@@ -117,29 +117,26 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		disableAllowlist = true
 	}
 
+	hostname := DefaultHostname
+	if envHostname, ok := os.LookupEnv("ETRACKER_HOSTNAME"); ok {
+		hostname = envHostname
+	}
+
 	port := DefaultPort
 	if envPort, ok := os.LookupEnv("ETRACKER_PORT"); ok {
-		port, err = strconv.Atoi(envPort)
-		if err != nil {
-			log.Print("Unable to parse ETRACKER_PORT")
-			port = DefaultPort
-		}
+		port = envPort
 	}
 
 	tlsPort := DefaultTlsPort
 	if envTlsPort, ok := os.LookupEnv("ETRACKER_TLS_PORT"); ok {
-		tlsPort, err = strconv.Atoi(envTlsPort)
-		if err != nil {
-			log.Print("Unable to parse ETRACKER_TLS_PORT")
-			tlsPort = DefaultTlsPort
-		}
+		tlsPort = envTlsPort
 	}
 
 	var tls TLSConfig
 	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
 	keyFile, ok2 := os.LookupEnv("ETRACKER_KEYFILE")
 	if ok1 && ok2 {
-		tls.TlsPort = tlsPort
+		tls.TlsHostname = fmt.Sprintf("%s:%s", hostname, tlsPort)
 		tls.CertFile = certFile
 		tls.KeyFile = keyFile
 		log.Print("TLS tracker enabled.")
@@ -159,7 +156,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		Algorithm:        algorithm,
 		Authorization:    authorization,
 		Dbpool:           dbpool,
-		Port:             port,
+		Hostname:         fmt.Sprintf("%s:%s", hostname, port),
 		Tls:              tls,
 		DisableAllowlist: disableAllowlist,
 	}

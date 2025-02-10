@@ -7,7 +7,7 @@ services:
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
       PGDATABASE: etracker
-      ETRACKER_AUTHORIZATION: mysecretapikey
+      ETRACKER_AUTHORIZATION: ${ETRACKER_AUTHORIZATION}
       # ETRACKER_CERTFILE=/certs/cert.pem
       # ETRACKER_KEYFILE=/certs/key.pem
       # ETRACKER_PORT=8080

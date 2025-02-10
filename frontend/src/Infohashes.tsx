@@ -38,7 +38,7 @@ function Infohashes() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch("http://localhost:9000/frontendapi/infohashes");
+        const response = await fetch(window.location.origin + "/api/infohashes");
         console.log('fetch stats response', response);
         const stats = await response.json();
 

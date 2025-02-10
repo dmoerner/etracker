@@ -2,134 +2,337 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"path/filepath"
+	"slices"
 
 	"github.com/dmoerner/etracker/internal/config"
 
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Some APIActions may not need to return anything to the hanlder other than
-// report a lack of error. In that case, they return ("", nil).
-type APIAction func(config.Config, *http.Request) (string, error)
-
-var ActionsMap map[string]APIAction = map[string]APIAction{
-	"insert_infohash": InsertInfoHash,
-	"remove_infohash": RemoveInfoHash,
+type GlobalStats struct {
+	Hashcount int `json:"hashcount"`
+	Seeders   int `json:"seeders"`
+	Leechers  int `json:"leechers"`
 }
 
-// APIHandler handles requests to the /api endpoint. It requires an appropriate
-// authorization header, which is currently a single secret string managed by
-// an environment variable.
-func APIHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+type Key struct {
+	Announce_key string `json:"announce_key"`
+}
+
+type Infohash struct {
+	Info_hash []byte `json:"infohash"`
+}
+
+type InfohashPost struct {
+	Info_hash []byte `json:"infohash"`
+	Name      string `json:"name"`
+}
+
+type InfohashStats struct {
+	Name       string `json:"name"`
+	Downloaded int    `json:"downloaded"`
+	Seeders    int    `json:"seeders"`
+	Leechers   int    `json:"leechers"`
+	Info_hash  []byte `json:"infohash"`
+}
+
+type MessageJSON struct {
+	Message string `json:"message"`
+}
+
+func writeError(w http.ResponseWriter, code int, msg MessageJSON) {
+	w.WriteHeader(code)
+	response, _ := json.Marshal(msg)
+	fmt.Fprintf(w, "%s", response)
+	log.Printf("API Error: %s", msg.Message)
+}
+
+func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
+	allowed := []string{conf.Hostname}
+	if conf.Tls != (config.TLSConfig{}) {
+		// For TLS, CORS requires the leading https.
+		allowed = append(allowed, fmt.Sprintf("https://%s", conf.Tls.TlsHostname))
+	}
+
+	origin := r.Header.Get("Origin")
+	if slices.Contains(allowed, origin) {
+		(*w).Header().Set("Access-Control-Allow-Origin", origin)
+		(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
+		(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	}
+}
+
+// validateAPIKey is a helper function which should be used at the start of any restricted
+// API paths. It restricts them to the correct key on a TLS connection.
+func validateAPIKey(conf config.Config, w http.ResponseWriter, r *http.Request) bool {
+	// Only accept TLS connections.
+	if r.URL.Scheme != "https" {
+		writeError(w, http.StatusForbidden, MessageJSON{"error: restricted API request from non-https source"})
+		return false
+	}
+
+	// The API key must be set in the configuration.
+	if conf.Authorization == "" {
+		writeError(w, http.StatusForbidden, MessageJSON{"error: restricted API access disabled"})
+		return false
+	}
+
+	//
+	authorization := r.Header.Get("Authorization")
+	if authorization == "" {
+		writeError(w, http.StatusBadRequest, MessageJSON{"error: restricted API request with empty authorization header"})
+		return false
+	}
+
+	if conf.Authorization == "" || authorization != conf.Authorization {
+		writeError(w, http.StatusForbidden, MessageJSON{"restricted API request from non-https source"})
+		return false
+	}
+
+	return true
+}
+
+// MuxAPIRoutes adds all the REST API routes to a mux.
+func MuxAPIRoutes(conf config.Config, mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/stats", StatsHandler(conf))
+	mux.HandleFunc("GET /api/generate", GenerateHandler(conf))
+	mux.HandleFunc("GET /api/infohashes", InfohashesHandler(conf))
+	mux.HandleFunc("POST /api/infohash", PostInfohashHandler(conf))
+	mux.HandleFunc("DELETE /api/infohash", DeleteInfohashHandler(conf))
+}
+
+// PostInfohashHandler takes a POST request to the /api/infohash endpoint, with
+// the body as a JSON object with a base64-encoded infohash and a name for the
+// infohash. It inserts it into the database and returns an appropriate JSON
+// message on success or failure.
+//
+// This is an authorization-only endpoint.
+func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Verify authorization. An empty authorization value or no key
-		// in the config means API access is forbidden.
-		authorization := r.Header.Get("Authorization")
-		if authorization == "" {
-			w.WriteHeader(http.StatusBadRequest)
+		if !validateAPIKey(conf, w, r) {
 			return
 		}
 
-		if conf.Authorization == "" || authorization != conf.Authorization {
-			w.WriteHeader(http.StatusForbidden)
+		var infohash InfohashPost
+		err := json.NewDecoder(r.Body).Decode(&infohash)
+		if err != nil || len(infohash.Info_hash) != 20 {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: did not receive valid infohash"})
 			return
 		}
 
-		action := r.URL.Query().Get("action")
-		if action == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		actionFunc, ok := ActionsMap[action]
-		if !ok {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		reply, err := actionFunc(conf, r)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-		}
-		_, err = io.WriteString(w, reply)
-		if err != nil {
-			// Log an error if we are unable to respond to client.
-			log.Printf("Error responding to API request: %v", err)
-		}
-	}
-}
-
-func undigestHex(h string) ([]byte, error) {
-	info_hash, err := hex.DecodeString(h)
-	if err != nil {
-		return []byte(""), fmt.Errorf("could not decode infohash, not a hex digest?")
-	}
-
-	if len(info_hash) != 20 {
-		return []byte(""), fmt.Errorf("missing info_hash key")
-	}
-	return info_hash, nil
-}
-
-// InsertInfoHash is a function which takes the info_hash from a query and
-// inserts it into the database. It always returns the empty string, and also
-// returns either an error or nil.
-func InsertInfoHash(conf config.Config, r *http.Request) (string, error) {
-	// info_hash_hex is required parameter, must be a hex digest.
-	info_hash_hex := r.URL.Query().Get("info_hash")
-
-	info_hash, err := undigestHex(info_hash_hex)
-	if err != nil {
-		return "", err
-	}
-
-	// license is optional parameter
-	name := r.URL.Query().Get("name")
-	license := r.URL.Query().Get("license")
-
-	_, err = conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO infohashes (info_hash, name, license)
-		    VALUES ($1, $2, $3)
+		_, err = conf.Dbpool.Exec(context.Background(), `
+		INSERT INTO infohashes (info_hash, name)
+		    VALUES ($1, $2)
 		`,
-		[]byte(info_hash), name, license)
-	if err != nil {
-		var pgErr *pgconn.PgError
-		// 23505: duplicate key insertion error code
-		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			return fmt.Sprintf("info_hash %s already inserted", hex.EncodeToString(info_hash)), fmt.Errorf("unable to insert info_hash: %w", err)
+			infohash.Info_hash, infohash.Name)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			// 23505: duplicate key insertion error code
+			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+				writeError(w, http.StatusBadRequest, MessageJSON{"error: infohash already inserted"})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error inserting infohash"})
+			return
 		}
-		return "", fmt.Errorf("unable to insert info_hash: %w", err)
-	}
 
-	return "", nil
+		response, err := json.Marshal(MessageJSON{"success"})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"success posting, but error making response"})
+		}
+
+		fmt.Fprintf(w, "%s", response)
+	}
 }
 
-// RemoveInfoHash is a function which takes the info_hash from a query and
-// removes it from the database. It always returns the empty string, and also
-// returns either an error or nil.
-func RemoveInfoHash(conf config.Config, r *http.Request) (string, error) {
-	// info_hash_hex is required parameter, must be a hex digest
-	info_hash_hex := r.URL.Query().Get("info_hash")
+// DeleteInfohashHandler takes a DELETE request to the /api/infohash endpoint, with
+// the body as a JSON object with a base64-encoded infohash and a name for the
+// infohash. It removes it from the database and returns an appropriate JSON
+// message on success or failure.
+//
+// This is an authorization-only endpoint.
+func DeleteInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateAPIKey(conf, w, r) {
+			return
+		}
 
-	info_hash, err := undigestHex(info_hash_hex)
-	if err != nil {
-		return "", err
-	}
+		var infohash Infohash
+		err := json.NewDecoder(r.Body).Decode(&infohash)
+		if err != nil || len(infohash.Info_hash) != 20 {
+			writeError(w, http.StatusBadRequest, MessageJSON{"did not receive valid infohash"})
+			return
+		}
 
-	_, err = conf.Dbpool.Exec(context.Background(), `
+		_, err = conf.Dbpool.Exec(context.Background(), `
 		DELETE FROM infohashes
 		WHERE info_hash = $1
 		`,
-		[]byte(info_hash))
-	if err != nil {
-		return "", fmt.Errorf("unable to remove info_hash: %w", err)
-	}
+			infohash.Info_hash)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error deleting infohash"})
+			return
+		}
 
-	return "", nil
+		response, err := json.Marshal(MessageJSON{"success"})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"success deleting, but error making response"})
+		}
+
+		fmt.Fprintf(w, "%s", response)
+	}
+}
+
+// ServeFrontend provides the basic routing logic for the SPA.
+func ServeFrontend(frontendPath string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fs := http.Dir(frontendPath)
+		path := filepath.Join(r.URL.Path)
+
+		// Serve static assets, if they exist.
+		if _, err := fs.Open(path); err == nil {
+			http.FileServer(fs).ServeHTTP(w, r)
+			return
+		}
+
+		// Route everything else through index.html.
+		http.ServeFile(w, r, filepath.Join(frontendPath, "index.html"))
+	}
+}
+
+// InfohashesHandler presets a REST API on /frontend/infohashes which returns
+// an object including information on each tracked infohash.
+func InfohashesHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enableCors(conf, &w, r)
+
+		query := fmt.Sprintf(`
+			WITH recent_announces AS (
+			    SELECT DISTINCT ON (announce_id, info_hash_id)
+				amount_left,
+				info_hash_id
+			    FROM
+				peers
+			    WHERE
+				last_announce >= NOW() - INTERVAL '%d seconds'
+				AND event <> $1
+			    ORDER BY
+				announce_id,
+				info_hash_id,
+				last_announce DESC
+			)
+			SELECT
+			    name,
+			    downloaded,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left = 0) AS seeders,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left > 0) AS leechers,
+			    info_hash
+			FROM
+			    infohashes
+			    LEFT JOIN recent_announces ON infohashes.id = recent_announces.info_hash_id
+			GROUP BY
+			    info_hash,
+			    name,
+			    downloaded
+			ORDER BY
+			    name
+			`,
+			config.StaleInterval)
+
+		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not query database"})
+			return
+		}
+
+		infohashes, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[InfohashStats])
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not parse response from database"})
+			return
+		}
+
+		result, err := json.Marshal(infohashes)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to construct response"})
+			return
+		}
+		fmt.Fprintf(w, "%s", result)
+	}
+}
+
+// StatsHandler presents a REST API on /frontendapi/stats which returns an object
+// including the total tracked infohashes, seeders, and leechers.
+func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enableCors(conf, &w, r)
+		query := fmt.Sprintf(`
+			WITH recent_announces AS (
+			    SELECT DISTINCT ON (info_hash_id, announce_id)
+				amount_left,
+				info_hash_id
+			    FROM
+				peers
+			    WHERE
+				last_announce >= NOW() - INTERVAL '%d seconds'
+				AND event <> $1
+			    ORDER BY
+				announce_id,
+				info_hash_id,
+				last_announce DESC
+			)
+			SELECT
+			    COUNT(DISTINCT info_hash) AS hashcount,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left = 0) AS seeders,
+			    COUNT(*) FILTER (WHERE recent_announces.amount_left > 0) AS leechers
+			FROM
+			    infohashes
+			    LEFT JOIN recent_announces ON infohashes.id = recent_announces.info_hash_id
+			`,
+			config.StaleInterval)
+
+		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not query database"})
+			return
+		}
+		stats, err := pgx.CollectRows(rows, pgx.RowToStructByName[GlobalStats])
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not parse response from database"})
+			return
+		}
+
+		result, err := json.Marshal(stats[0])
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to construct response"})
+			return
+		}
+		fmt.Fprintf(w, "%s", result)
+	}
+}
+
+func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enableCors(conf, &w, r)
+		announce_key, err := config.GenerateAnnounceKey(conf)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not generate announce key"})
+			return
+		}
+		key := Key{Announce_key: announce_key}
+
+		result, err := json.Marshal(key)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to construct response"})
+			return
+		}
+		fmt.Fprintf(w, "%s", result)
+	}
 }
