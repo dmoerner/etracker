@@ -14,13 +14,13 @@ function Table({ data }: { data: InfohashesData[] }) {
     <table>
       <thead>
         <tr>
-          {Object.keys(data[0]).map(key => (
+          {data.length > 0 && Object.keys(data[0]).map(key => (
             <th key={key}>{key}</th>
           ))}
         </tr>
       </thead>
       <tbody>
-        {data.map((row, index) => (
+        {data.length > 0 && data.map((row, index) => (
           <tr key={index}>
             {Object.values(row).map((value, index2) => (
               <td key={index2}>{value}</td>
