@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -42,25 +43,10 @@ func main() {
 	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
 
 	s := &http.Server{
-		Addr:              conf.Hostname,
+		Addr:              fmt.Sprintf("localhost:%d", conf.BackendPort),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       5 * time.Second,
 		Handler:           http.TimeoutHandler(mux, time.Second, "Timeout"),
-	}
-
-	if conf.Tls != (config.TLSConfig{}) {
-		t := &http.Server{
-			Addr:              conf.Tls.TlsHostname,
-			ReadHeaderTimeout: 5 * time.Second,
-			ReadTimeout:       5 * time.Second,
-			Handler:           http.TimeoutHandler(mux, time.Second, "Timeout"),
-		}
-
-		go func() {
-			if err := t.ListenAndServeTLS(conf.Tls.CertFile, conf.Tls.KeyFile); err != nil {
-				log.Fatalf("Unable to start HTTPS server: %v", err)
-			}
-		}()
 	}
 
 	if err := s.ListenAndServe(); err != nil {

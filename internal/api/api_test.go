@@ -60,38 +60,6 @@ func TestUnsetAuthorization(t *testing.T) {
 	}
 }
 
-func TestNoAPIOnHTTP(t *testing.T) {
-	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
-
-	data := []struct {
-		name          string
-		request       string
-		authorization string
-		expected      int
-	}{
-		// Although this is a good key, over http the return is 403.
-		{"good api key but over http", "http://example.com:8080/api/infohash", testutils.DefaultAPIKey, http.StatusForbidden},
-	}
-
-	handler := PostInfohashHandler(conf)
-
-	for _, d := range data {
-		t.Run(d.name, func(t *testing.T) {
-			req := httptest.NewRequest("POST", d.request, nil)
-			if d.authorization != "" {
-				req.Header.Add("Authorization", d.authorization)
-			}
-			w := httptest.NewRecorder()
-
-			handler(w, req)
-			if w.Result().StatusCode != d.expected {
-				t.Errorf("expected %d, got %d", d.expected, w.Result().StatusCode)
-			}
-		})
-	}
-}
-
 func TestAuthorizationHeader(t *testing.T) {
 	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)

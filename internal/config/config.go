@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/dmoerner/etracker/internal/db"
 
@@ -28,9 +29,8 @@ const (
 	StaleInterval = 2 * Interval
 	MinInterval   = 30 // 30 seconds
 
-	DefaultHostname = "localhost"
-	DefaultPort     = "8080"
-	DefaultTlsPort  = "8443"
+	DefaultBackendPort      = 3000
+	DefaultFrontendHostname = "localhost"
 )
 
 type Announce struct {
@@ -50,9 +50,9 @@ type Config struct {
 	Algorithm        PeeringAlgorithm
 	Authorization    string
 	Dbpool           *pgxpool.Pool
-	Hostname         string
-	Tls              TLSConfig
+	BackendPort      int
 	DisableAllowlist bool
+	FrontendHostname string
 }
 
 type TLSConfig struct {
@@ -105,8 +105,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 	}
 
 	// An empty authorization string in the config means the API is forbidden.
-	// It is the responsibility of clients who use this struct key to forbid this.
-	var authorization string
+	// It is the responsibility of functions who use this struct key to forbid this.
 	authorization, ok := os.LookupEnv("ETRACKER_AUTHORIZATION")
 	if !ok {
 		log.Print("ETRACKER_AUTHORIZATION not set in environment.")
@@ -117,29 +116,16 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		disableAllowlist = true
 	}
 
-	hostname := DefaultHostname
-	if envHostname, ok := os.LookupEnv("ETRACKER_HOSTNAME"); ok {
-		hostname = envHostname
+	backendPort := DefaultBackendPort
+	if envBackendPort, ok := os.LookupEnv("ETRACKER_BACKEND_PORT"); ok {
+		if intBackendPort, err := strconv.Atoi(envBackendPort); err != nil {
+			backendPort = intBackendPort
+		}
 	}
 
-	port := DefaultPort
-	if envPort, ok := os.LookupEnv("ETRACKER_PORT"); ok {
-		port = envPort
-	}
-
-	tlsPort := DefaultTlsPort
-	if envTlsPort, ok := os.LookupEnv("ETRACKER_TLS_PORT"); ok {
-		tlsPort = envTlsPort
-	}
-
-	var tls TLSConfig
-	certFile, ok1 := os.LookupEnv("ETRACKER_CERTFILE")
-	keyFile, ok2 := os.LookupEnv("ETRACKER_KEYFILE")
-	if ok1 && ok2 {
-		tls.TlsHostname = fmt.Sprintf("%s:%s", hostname, tlsPort)
-		tls.CertFile = certFile
-		tls.KeyFile = keyFile
-		log.Print("TLS tracker enabled.")
+	frontendHostname := DefaultFrontendHostname
+	if envFrontendHostname, ok := os.LookupEnv("ETRACKER_FRONTEND_HOSTNAME"); ok {
+		frontendHostname = envFrontendHostname
 	}
 
 	dbpool, err := db.DbConnect()
@@ -156,9 +142,9 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		Algorithm:        algorithm,
 		Authorization:    authorization,
 		Dbpool:           dbpool,
-		Hostname:         fmt.Sprintf("%s:%s", hostname, port),
-		Tls:              tls,
+		BackendPort:      backendPort,
 		DisableAllowlist: disableAllowlist,
+		FrontendHostname: frontendHostname,
 	}
 
 	return config

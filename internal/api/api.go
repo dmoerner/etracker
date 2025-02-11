@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
-	"slices"
 
 	"github.com/dmoerner/etracker/internal/config"
 
@@ -56,29 +55,16 @@ func writeError(w http.ResponseWriter, code int, msg MessageJSON) {
 }
 
 func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
-	allowed := []string{conf.Hostname}
-	if conf.Tls != (config.TLSConfig{}) {
-		// For TLS, CORS requires the leading https.
-		allowed = append(allowed, fmt.Sprintf("https://%s", conf.Tls.TlsHostname))
-	}
-
-	origin := r.Header.Get("Origin")
-	if slices.Contains(allowed, origin) {
-		(*w).Header().Set("Access-Control-Allow-Origin", origin)
-		(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
-		(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	}
+	// allowed := []string{conf.FrontendHostname}
+	// origin := r.Header.Get("Origin")
+	(*w).Header().Set("Access-Control-Allow-Origin", conf.FrontendHostname)
+	(*w).Header().Set("Access-Control-Allow-Methods", "GET, POST")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
 // validateAPIKey is a helper function which should be used at the start of any restricted
-// API paths. It restricts them to the correct key on a TLS connection.
+// API paths.
 func validateAPIKey(conf config.Config, w http.ResponseWriter, r *http.Request) bool {
-	// Only accept TLS connections.
-	if r.TLS == nil {
-		writeError(w, http.StatusForbidden, MessageJSON{"error: restricted API request from non-https source"})
-		return false
-	}
-
 	// The API key must be set in the configuration.
 	if conf.Authorization == "" {
 		writeError(w, http.StatusForbidden, MessageJSON{"error: restricted API access disabled"})

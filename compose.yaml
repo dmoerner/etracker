@@ -4,22 +4,17 @@ services:
     container_name: etracker
     environment:
       PGHOST: etracker_pg
+      PGDATABASE: etracker
       PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
-      PGDATABASE: etracker
       ETRACKER_AUTHORIZATION: ${ETRACKER_AUTHORIZATION}
-      # ETRACKER_CERTFILE=/certs/cert.pem
-      # ETRACKER_KEYFILE=/certs/key.pem
-      # ETRACKER_PORT=8080
-      # ETRACKER_TLS_PORT=8443
-    # volumes:
-    #   - ../not-committed/certs:/certs:z
+      ETRACKER_FRONTEND_HOSTNAME: ${ETRACKER_FRONTEND_HOSTNAME}
+      # ETRACKER_BACKEND_PORT=3000
     depends_on:
       etracker_pg:
         condition: service_healthy
     ports:
-      - 8080:8080
-      # - 8443:8443
+      - 3000:3000
 
   etracker_pg:
     image: postgres:17
