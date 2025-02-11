@@ -4,23 +4,33 @@
 # to a running copy of etracker through the admin API.
 
 import argparse
-import requests
+import base64
 import bencoder
 import hashlib
+import requests
 
 
-def calculate_infohash(filename):
+def parse_torrent(filename):
     with open(filename, "rb") as f:
         bencoded = bencoder.decode(f.read())
+        if not isinstance(bencoded, dict):
+            raise ValueError("invalid torrent file")
         info_dict = bencoded[b"info"]
-        return hashlib.sha1(bencoder.encode(info_dict)).hexdigest()
+        info_hash = base64.b64encode(
+            hashlib.sha1(bencoder.encode(info_dict)).digest()
+        ).decode("utf-8")
+        name = info_dict[b"name"].decode("utf-8")
+        return info_hash, name
 
 
-def add_api(noverify, address, apikey, infohash, name):
-    url = f"{address}?action=insert_infohash&info_hash={infohash}&name={name}"
-    print(url)
-    r = requests.get(url, headers={"Authorization": apikey}, verify=not noverify)
-    return r.status_code
+def post_infohash(hostname, apikey, info_hash, name):
+    url = f"{hostname}/api/infohash"
+    body = {"info_hash": info_hash, "name": name}
+    verify = True
+    if "localhost" in hostname or "127.0.0.1" in hostname:
+        verify = False
+    r = requests.post(url, headers={"Authorization": apikey}, json=body, verify=verify)
+    return r
 
 
 def main():
@@ -29,21 +39,16 @@ def main():
         description="calculate torrent infohash and add to etracker allowlist",
     )
 
-    parser.add_argument("--noverify", help='Do not verify TLS certificates"')
-    parser.add_argument("address", help="etracker address")
+    parser.add_argument("hostname", help="etracker hostname")
     parser.add_argument("apikey", help="etracker api key")
     parser.add_argument("torrentfile", help="path to torrent file")
-    parser.add_argument(
-        "name", help="infohash name, should be base path of data in most cases"
-    )
 
     args = parser.parse_args()
 
-    infohash = calculate_infohash(args.torrentfile)
-    print(infohash)
+    info_hash, name = parse_torrent(args.torrentfile)
 
-    result = add_api(args.noverify, args.address, args.apikey, infohash, args.name)
-    print(result)
+    result = post_infohash(args.hostname, args.apikey, info_hash, name)
+    print(f"{result.status_code}, {result.json()}")
 
 
 if __name__ == "__main__":

@@ -28,11 +28,11 @@ type Key struct {
 }
 
 type Infohash struct {
-	Info_hash []byte `json:"infohash"`
+	Info_hash []byte `json:"info_hash"`
 }
 
 type InfohashPost struct {
-	Info_hash []byte `json:"infohash"`
+	Info_hash []byte `json:"info_hash"`
 	Name      string `json:"name"`
 }
 
@@ -41,7 +41,7 @@ type InfohashStats struct {
 	Downloaded int    `json:"downloaded"`
 	Seeders    int    `json:"seeders"`
 	Leechers   int    `json:"leechers"`
-	Info_hash  []byte `json:"infohash"`
+	Info_hash  []byte `json:"info_hash"`
 }
 
 type MessageJSON struct {
@@ -74,7 +74,7 @@ func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
 // API paths. It restricts them to the correct key on a TLS connection.
 func validateAPIKey(conf config.Config, w http.ResponseWriter, r *http.Request) bool {
 	// Only accept TLS connections.
-	if r.URL.Scheme != "https" {
+	if r.TLS == nil {
 		writeError(w, http.StatusForbidden, MessageJSON{"error: restricted API request from non-https source"})
 		return false
 	}

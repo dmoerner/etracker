@@ -25,16 +25,13 @@ https://unlicense.org/.
 
 # Setup and Installation
 
-`etracker` is designed to work with Docker or Podman. Primary testing is done with
-Podman; podman-compose > 1.3.x is required.
-
-The included "docker" directory includes a Dockerfile to build a Docker image. Check out the docker file in `build/docker-compose.yml` for configuration options; at a minimum, you will need to export the environmental variables `$PGUSER` and `$PGPASSWORD`. For example, you can build and run it with a command like the following:
+`etracker` is designed to be deployed with Docker. The included "docker" directory includes a Dockerfile to build a Docker image. Check out the docker file in `compose.yml` for configuration options; at a minimum, you will need to export the environmental variables `$PGUSER` and `$PGPASSWORD`. For example, you can build and run it with a command like the following:
 
 ```bash
 $ export PGUSER="etracker_pguser"
 $ export PGPASSWORD="etracker_secretpgpassword"
-$ podman build --no-cache --pull -f build/Dockerfile . -t user/etracker
-$ cd build && podman compose up -d etracker
+$ docker build . -t user/etracker
+$ docker compose up -d etracker
 ```
 
 By default this will start the tracker on `localhost:8080`. There is optional
@@ -43,19 +40,16 @@ API and to the TLS tracker. For the latter, you will need
 to provide the appropriate certificates yourself. Self-signed certificates for
 local use can easily be generated with https://go.dev/src/crypto/tls/generate_cert.go.
 
-By default, `etracker` uses an allowlist for infohashes. You may turn this off by setting the environmental variable `$ETRACKER_DISABLE_ALLOWLIST` to "true". At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate GET request to the `/api` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example, and skipping verification for self-signed certificates:
+By default, `etracker` uses an allowlist for infohashes. You may turn this off by setting the environmental variable `$ETRACKER_DISABLE_ALLOWLIST` to "true". At this time, infohashes can only be added by inserting them into the infohashes table directly, or by making an appropriate POST request to the `/api/infohash` endpoint, with the correct API key in the Authorization header, over TLS. *If TLS is not enabled, the API will not be accessible.* The API key is set via the environmental variable `$ETRACKER_AUTHORIZATION`. The `scripts/add_infohash.py` script will calculate the infohash of a local torrent file and add it to the allowlist. For example:
 
 ```bash
-$ python3 scripts/add_infohash.py --noverify True https://localhost:8443/api "$ETRACKER_AUTHORIZATION" ./data.txt.torrent description
+$ python3 scripts/add_infohash.py https://localhost:8443 "$ETRACKER_AUTHORIZATION" torrent_file.torrent
 ```
 
-`etracker` is written in Go and includes a test suite. If you would like to run the test suite yourself,
-you will need to install Go, and start a copy of the test database with `podman
-compose up -d etracker_pg_test` using the compose file in the `build/` directory. Note that the testing framework is not safe for
-concurrent tests, so tests should be run with:
+`etracker` is written in Go and includes a test suite. You can run the test suite by installing Go and Docker (for the testing database), and then run:
 
 ```
-$ go test -p 1 ./...
+$ make test
 ```
 
 # Technical Discussion: Free-Riding
