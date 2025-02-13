@@ -119,8 +119,8 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 	query := fmt.Sprintf(`
 		SELECT DISTINCT ON (info_hash_id)
 		    amount_left,
-		    uploaded,
-		    downloaded
+		    announces.uploaded,
+		    announces.downloaded
 		FROM
 		    announces
 		    JOIN peers ON announces.peers_id = peers.id

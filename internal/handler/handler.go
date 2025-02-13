@@ -167,43 +167,54 @@ func checkInfoHash(conf config.Config, announce *config.Announce) error {
 
 // writeAnnounce updates the peers table with an announce.
 func writeAnnounce(conf config.Config, announce *config.Announce) error {
-	// // Calculate most recent upload change.
-	// var last_uploaded int
-	// err := conf.Dbpool.QueryRow(context.Background(), `
-	// 	SELECT
-	// 	    uploaded
-	// 	FROM
-	// 	    announces
-	// 	    LEFT JOIN infohashes ON announces.info_hash_id = infohashes.id
-	// 	    LEFT JOIN peers ON announces.peers_id = peers.id
-	// 	WHERE
-	// 	    info_hash = $1
-	// 	    AND announce_key <> $2
-	// 	    AND event <> $3
-	// 	ORDER BY
-	// 	    last_announce DESC
-	// 	LIMIT 1
-	// 	`,
-	// 	announce.Info_hash, announce.Announce_key, config.Stopped).Scan(&last_uploaded)
-	// if err != nil {
-	// 	if !errors.Is(err, pgx.ErrNoRows) {
-	// 		return fmt.Errorf("error fetching recent announces: %w", err)
-	// 	}
-	// 	// If the select returns no rows, this is the peer's first announce.
-	// 	last_uploaded = 0
-	// }
-	// upload_change = announce.Uploaded - last_uploaded
-
-	// Update peers table, setting a new peer_max_upload. At the moment this key
-	// is only written, but not read. It is an example of the kind of information
-	// which I hope will be useful in the future to detect cheating.
-	_, err := conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO peers (announce_key)
-		    VALUES ($1)
-		ON CONFLICT (announce_key)
-		    DO NOTHING
+	// Calculate most recent upload change.
+	var last_uploaded int
+	var last_downloaded int
+	err := conf.Dbpool.QueryRow(context.Background(), `
+		SELECT
+		    announces.uploaded, announces.downloaded
+		FROM
+		    announces
+		    LEFT JOIN infohashes ON announces.info_hash_id = infohashes.id
+		    LEFT JOIN peers ON announces.peers_id = peers.id
+		WHERE
+		    info_hash = $1
+		    AND announce_key <> $2
+		    AND event <> $3
+		ORDER BY
+		    last_announce DESC
+		LIMIT 1
 		`,
-		announce.Announce_key)
+		announce.Info_hash, announce.Announce_key, config.Stopped).Scan(&last_uploaded, &last_downloaded)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("error fetching recent announces: %w", err)
+		}
+		// If the select returns no rows, this is the peer's first announce.
+		last_uploaded = 0
+		last_downloaded = 0
+	}
+	upload_change := announce.Uploaded - last_uploaded
+	download_change := announce.Downloaded - last_downloaded
+	completed_snatch := 0
+	if announce.Event == config.Completed {
+		completed_snatch = 1
+	}
+
+	// Update peers table.
+	_, err = conf.Dbpool.Exec(context.Background(), `
+		INSERT INTO peers (announce_key, snatched, uploaded, downloaded)
+		    VALUES ($1, $2, $3, $4)
+		ON CONFLICT (announce_key)
+		    DO UPDATE SET
+			snatched = peers.snatched + EXCLUDED.snatched,
+			uploaded = peers.uploaded + EXCLUDED.uploaded,
+			downloaded = peers.downloaded + EXCLUDED.downloaded
+		`,
+		announce.Announce_key,
+		completed_snatch,
+		upload_change,
+		download_change)
 	if err != nil {
 		return fmt.Errorf("error inserting announce_key: %w", err)
 	}

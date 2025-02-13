@@ -50,7 +50,10 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	_, err = dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS peers (
 		    id serial PRIMARY KEY,
-		    announce_key text NOT NULL UNIQUE
+		    announce_key text NOT NULL UNIQUE,
+		    snatched integer DEFAULT 0 NOT NULL,
+		    downloaded integer DEFAULT 0 NOT NULL,
+		    uploaded integer DEFAULT 0 NOT NULL
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_announce_key ON peers (announce_key);

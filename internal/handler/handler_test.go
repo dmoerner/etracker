@@ -90,7 +90,73 @@ func countPeersReceived(recorder *httptest.ResponseRecorder) int {
 	return numRec
 }
 
-func TestDownloadedIncrement(t *testing.T) {
+func TestPeersStatsIncrement(t *testing.T) {
+	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
+
+	requests := []testutils.Request{
+		{
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Event:       config.Started,
+		},
+		{
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Uploaded:    100,
+			Downloaded:  50,
+		},
+		{
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Event:       config.Completed,
+			Downloaded:  50,
+		},
+		{
+			AnnounceKey: testutils.AnnounceKeys[1],
+			Info_hash:   testutils.AllowedInfoHashes["a"],
+			Uploaded:    200,
+		},
+	}
+
+	handler := PeerHandler(conf)
+
+	for _, r := range requests {
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req.SetPathValue("id", r.AnnounceKey)
+		w := httptest.NewRecorder()
+		handler(w, req)
+	}
+
+	var snatched int
+	var downloaded int
+	var uploaded int
+
+	err := conf.Dbpool.QueryRow(context.Background(), `
+		SELECT
+		    snatched, downloaded, uploaded
+		FROM
+		    peers
+		WHERE
+		    announce_key = $1
+		`,
+		testutils.AnnounceKeys[1]).Scan(&snatched, &downloaded, &uploaded)
+	if err != nil {
+		t.Fatalf("error querying test db: %v", err)
+	}
+
+	if snatched != 1 {
+		t.Errorf("expected %d snatched torrent, got %d", 1, snatched)
+	}
+	if downloaded != 50+50 {
+		t.Errorf("expected %d downloaded, got %d", 50+50, downloaded)
+	}
+	if uploaded != 100+200 {
+		t.Errorf("expected %d uploaded, got %d", 100+200, uploaded)
+	}
+}
+
+func TestInfohashesDownloadedIncrement(t *testing.T) {
 	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
 
