@@ -22,9 +22,7 @@ func DbConnect() (*pgxpool.Pool, error) {
 	return dbpool, nil
 }
 
-// DbInitialize ensures that all required tables are set up. The infohashes
-// table persists, but peerids and peers tables should be refreshed on each
-// restart.
+// DbInitialize ensures that all required tables are set up.
 func DbInitialize(dbpool *pgxpool.Pool) error {
 	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
 	// and an optional name, which should match the "name" section in the info
@@ -45,30 +43,30 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		return fmt.Errorf("unable to create infohashes table: %w", err)
 	}
 
-	// peerids table. Includes stored score for each peer used to calculate
+	// peers table. Includes stored score for each peer used to calculate
 	// peer quality, and will in the future be extended to include
 	// statistics to detect cheaters. At the moment, the peer_max_upload
 	// key is written but not read.
 	_, err = dbpool.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS peerids (
+		CREATE TABLE IF NOT EXISTS peers (
 		    id serial PRIMARY KEY,
 		    announce_key text NOT NULL UNIQUE
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_announce_key ON peerids (announce_key);
+		CREATE INDEX IF NOT EXISTS idx_announce_key ON peers (announce_key);
 		`)
 	if err != nil {
-		return fmt.Errorf("unable to create peerids table: %w", err)
+		return fmt.Errorf("unable to create peers table: %w", err)
 	}
 
-	// peers table, which includes information from announces.
+	// announces table, which includes information from announces.
 	// "left" is a reserved word so we use amount_left.
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(context.Background(), `
-		CREATE TABLE IF NOT EXISTS peers (
+		CREATE TABLE IF NOT EXISTS announces (
 		    id serial PRIMARY KEY,
-		    announce_id integer references peerids(id),
+		    peers_id integer references peers(id),
 		    ip_port bytea NOT NULL,
 		    info_hash_id integer REFERENCES infohashes (id),
 		    amount_left integer NOT NULL,
@@ -76,7 +74,7 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		    uploaded integer NOT NULL,
 		    event INTEGER,
 		    last_announce timestamptz NOT NULL DEFAULT NOW(),
-		    UNIQUE (announce_id, info_hash_id)
+		    UNIQUE (peers_id, info_hash_id)
 		);
 
 		CREATE OR REPLACE FUNCTION trigger_set_timestamp ()
@@ -90,12 +88,12 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 		LANGUAGE plpgsql;
 
 		CREATE OR REPLACE TRIGGER set_timestamp
-		    BEFORE UPDATE ON peers
+		    BEFORE UPDATE ON announces
 		    FOR EACH ROW
 		    EXECUTE PROCEDURE trigger_set_timestamp ();
 		`)
 	if err != nil {
-		return fmt.Errorf("unable to create peers table: %w", err)
+		return fmt.Errorf("unable to create announces table: %w", err)
 	}
 
 	return nil

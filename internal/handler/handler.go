@@ -173,9 +173,9 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	// 	SELECT
 	// 	    uploaded
 	// 	FROM
-	// 	    peers
-	// 	    LEFT JOIN infohashes ON peers.info_hash_id = infohashes.id
-	// 	    LEFT JOIN peerids ON peers.announce_id = peerids.id
+	// 	    announces
+	// 	    LEFT JOIN infohashes ON announces.info_hash_id = infohashes.id
+	// 	    LEFT JOIN peers ON announces.peers_id = peers.id
 	// 	WHERE
 	// 	    info_hash = $1
 	// 	    AND announce_key <> $2
@@ -194,11 +194,11 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	// }
 	// upload_change = announce.Uploaded - last_uploaded
 
-	// Update peerids table, setting a new peer_max_upload. At the moment this key
+	// Update peers table, setting a new peer_max_upload. At the moment this key
 	// is only written, but not read. It is an example of the kind of information
 	// which I hope will be useful in the future to detect cheating.
 	_, err := conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO peerids (announce_key)
+		INSERT INTO peers (announce_key)
 		    VALUES ($1)
 		ON CONFLICT (announce_key)
 		    DO NOTHING
@@ -224,11 +224,11 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 		}
 	}
 
-	// Update peers table
+	// Update announces table
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO peers (announce_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
+		INSERT INTO announces (peers_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
 		SELECT
-		    peerids.id,
+		    peers.id,
 		    infohashes.id,
 		    $3,
 		    $4,
@@ -237,10 +237,10 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 		    $7
 		FROM
 		    infohashes
-		    JOIN peerids ON peerids.announce_key = $1
+		    JOIN peers ON peers.announce_key = $1
 		WHERE
 		    infohashes.info_hash = $2
-		ON CONFLICT (announce_id,
+		ON CONFLICT (peers_id,
 		    info_hash_id)
 		    DO UPDATE SET
 			ip_port = $3,
@@ -274,9 +274,9 @@ func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) er
 		SELECT DISTINCT ON (announce_key)
 		    ip_port
 		FROM
-		    peers
-		    JOIN peerids ON peers.announce_id = peerids.id
-		    JOIN infohashes ON peers.info_hash_id = infohashes.id
+		    announces
+		    JOIN peers ON announces.peers_id = peers.id
+		    JOIN infohashes ON announces.info_hash_id = infohashes.id
 		WHERE
 		    info_hash = $1
 		    AND announce_key <> $2

@@ -381,7 +381,7 @@ func TestGenerate(t *testing.T) {
 	// Verify that the key was written to the db.
 	var written bool
 	err = conf.Dbpool.QueryRow(context.Background(), `
-		SELECT EXISTS (SELECT FROM peerids WHERE announce_key = $1)
+		SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1)
 		`,
 		received.Announce_key).Scan(&written)
 	if err != nil {

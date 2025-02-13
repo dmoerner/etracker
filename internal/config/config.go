@@ -75,7 +75,7 @@ func GenerateAnnounceKey(conf Config) (string, error) {
 	key := hex.EncodeToString(randomBytes)
 
 	_, err := conf.Dbpool.Exec(context.Background(), `
-			INSERT INTO peerids (announce_key)
+			INSERT INTO peers (announce_key)
 			    VALUES ($1)
 			`,
 		key)

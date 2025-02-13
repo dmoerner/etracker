@@ -607,9 +607,9 @@ func TestAnnounceWrite(t *testing.T) {
 		    info_hash,
 		    last_announce
 		FROM
-		    peers
-		    JOIN peerids ON peers.announce_id = peerids.id
-		    JOIN infohashes ON peers.info_hash_id = infohashes.id
+		    announces
+		    JOIN peers ON announces.peers_id = peers.id
+		    JOIN infohashes ON announces.info_hash_id = infohashes.id
 		LIMIT 1
 		`).Scan(&ip_port, &info_hash, &last_announce)
 	if err != nil {

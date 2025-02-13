@@ -27,7 +27,7 @@ func TestTables(t *testing.T) {
 	conf := BuildTestConfig(nil, DefaultAPIKey)
 	defer TeardownTest(conf)
 
-	tables := []string{"peers", "infohashes", "peerids"}
+	tables := []string{"announces", "infohashes", "peers"}
 
 	for _, table := range tables {
 		ok, err := tableExists(conf.Dbpool, table)

@@ -108,7 +108,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 
 	for _, v := range AnnounceKeys {
 		_, err = dbpool.Exec(context.Background(), `
-			INSERT INTO peerids (announce_key)
+			INSERT INTO peers (announce_key)
 			    VALUES ($1)
 			`,
 			v)
@@ -140,7 +140,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 
 func TeardownTest(conf config.Config) {
 	_, err := conf.Dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peers
+		DROP TABLE IF EXISTS announces
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
@@ -152,7 +152,7 @@ func TeardownTest(conf config.Config) {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		DROP TABLE IF EXISTS peerids
+		DROP TABLE IF EXISTS peers
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)

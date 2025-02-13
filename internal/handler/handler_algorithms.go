@@ -34,8 +34,8 @@ func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 		SELECT
 		    COUNT(*)
 		FROM
-		    peers
-		    JOIN peerids ON peers.announce_id = peerids.id
+		    announces
+		    JOIN peers ON announces.peers_id = peers.id
 		WHERE
 		    announce_key = $1
 		    AND last_announce >= NOW() - INTERVAL '%d seconds'
@@ -69,8 +69,8 @@ func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 		SELECT
 		    COUNT(*)
 		FROM
-		    peers
-		    JOIN peerids ON peers.announce_id = peerids.id
+		    announces
+		    JOIN peers ON announces.peers_id = peers.id
 		WHERE
 		    announce_key = $1
 		    AND amount_left = 0
@@ -122,8 +122,8 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    uploaded,
 		    downloaded
 		FROM
-		    peers
-		    JOIN peerids ON peers.announce_id = peerids.id
+		    announces
+		    JOIN peers ON announces.peers_id = peers.id
 		WHERE
 		    announce_key = $1
 		    AND last_announce >= NOW() - INTERVAL '%d seconds'
@@ -186,14 +186,14 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    SELECT
 			COUNT(*) AS seed_count
 		    FROM
-			peers
-			JOIN peerids ON peers.announce_id = peerids.id
+			announces
+			JOIN peers ON announces.peers_id = peers.id
 		    WHERE
 			amount_left = 0
 			AND last_announce >= NOW() - INTERVAL '%d seconds'
 			AND event <> $1
 		    GROUP BY
-			peerids.id
+			peers.id
 		)
 		SELECT
 		    COALESCE((STDDEV_POP(seed_count) + AVG(seed_count))::integer, $2)

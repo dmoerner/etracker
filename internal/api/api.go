@@ -203,16 +203,16 @@ func InfohashesHandler(conf config.Config) func(w http.ResponseWriter, r *http.R
 
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
-			    SELECT DISTINCT ON (announce_id, info_hash_id)
+			    SELECT DISTINCT ON (peers_id, info_hash_id)
 				amount_left,
 				info_hash_id
 			    FROM
-				peers
+				announces
 			    WHERE
 				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
-				announce_id,
+				peers_id,
 				info_hash_id,
 				last_announce DESC
 			)
@@ -262,16 +262,16 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 		enableCors(conf, &w, r)
 		query := fmt.Sprintf(`
 			WITH recent_announces AS (
-			    SELECT DISTINCT ON (info_hash_id, announce_id)
+			    SELECT DISTINCT ON (info_hash_id, peers_id)
 				amount_left,
 				info_hash_id
 			    FROM
-				peers
+				announces
 			    WHERE
 				last_announce >= NOW() - INTERVAL '%d seconds'
 				AND event <> $1
 			    ORDER BY
-				announce_id,
+				peers_id,
 				info_hash_id,
 				last_announce DESC
 			)
