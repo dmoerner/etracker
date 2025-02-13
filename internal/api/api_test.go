@@ -100,7 +100,7 @@ func TestInsertDupeInfohash(t *testing.T) {
 
 	data := []APIRequest{
 		// Inserting a duplicate key
-		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "success", http.StatusOK},
+		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "success", http.StatusCreated},
 		{"insert dupe", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "error: infohash already inserted", http.StatusBadRequest},
 	}
 
@@ -181,7 +181,7 @@ func TestInsertRemoveInfohash(t *testing.T) {
 	defer testutils.TeardownTest(conf)
 
 	data := []APIRequest{
-		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "success", http.StatusOK},
+		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "success", http.StatusCreated},
 	}
 
 	postHandler := PostInfohashHandler(conf)

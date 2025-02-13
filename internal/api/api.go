@@ -135,6 +135,7 @@ func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http
 			writeError(w, http.StatusInternalServerError, MessageJSON{"success posting, but error making response"})
 		}
 
+		w.WriteHeader(http.StatusCreated)
 		fmt.Fprintf(w, "%s", response)
 	}
 }
