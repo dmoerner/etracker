@@ -179,7 +179,7 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 		    LEFT JOIN peers ON announces.peers_id = peers.id
 		WHERE
 		    info_hash = $1
-		    AND announce_key <> $2
+		    AND announce_key = $2
 		    AND event <> $3
 		ORDER BY
 		    last_announce DESC
@@ -196,6 +196,16 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 	upload_change := announce.Uploaded - last_uploaded
 	download_change := announce.Downloaded - last_downloaded
+
+	// Upload and download only go up. If they are negative, an announce was
+	// not sent or the client reset its session.
+	if upload_change < 0 {
+		upload_change = 0
+	}
+	if download_change < 0 {
+		download_change = 0
+	}
+
 	completed_snatch := 0
 	if announce.Event == config.Completed {
 		completed_snatch = 1

@@ -110,12 +110,14 @@ func TestPeersStatsIncrement(t *testing.T) {
 			AnnounceKey: testutils.AnnounceKeys[1],
 			Info_hash:   testutils.AllowedInfoHashes["a"],
 			Event:       config.Completed,
-			Downloaded:  50,
+			Uploaded:    100,
+			Downloaded:  100,
 		},
 		{
 			AnnounceKey: testutils.AnnounceKeys[1],
 			Info_hash:   testutils.AllowedInfoHashes["a"],
-			Uploaded:    200,
+			Downloaded:  100,
+			Uploaded:    300,
 		},
 	}
 
