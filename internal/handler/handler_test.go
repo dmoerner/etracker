@@ -332,6 +332,79 @@ func TestStopped(t *testing.T) {
 	}
 }
 
+func TestPeersForRatio(t *testing.T) {
+	conf := testutils.BuildTestConfig(PeersForRatio, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
+
+	// Populate 50 seeders
+	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+
+	for _, r := range seeders {
+		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+	}
+
+	// Test new bad seeder, they are not currently in the swarm but receive full amount.
+	newSeederRequest := testutils.Request{
+		AnnounceKey: testutils.AnnounceKeys[1],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Numwant:     50,
+	}
+	newSeederExpected := 50
+
+	newSeederRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(newSeederRecorder,
+		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+
+	newSeederReceived := countPeersReceived(newSeederRecorder)
+	if newSeederReceived != newSeederExpected {
+		t.Errorf("new seeder: expected %d peers, got %d", newSeederExpected, newSeederReceived)
+	}
+
+	// Test seeder with ratio of 1.0 who is seeding nothing
+	newSeederRequest = testutils.Request{
+		AnnounceKey: testutils.AnnounceKeys[2],
+		Info_hash:   testutils.AllowedInfoHashes["b"],
+		Downloaded:  100,
+		Event:       config.Completed,
+	}
+
+	newSeederRecorder = httptest.NewRecorder()
+	mux.ServeHTTP(newSeederRecorder,
+		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+
+	newSeederRequest = testutils.Request{
+		AnnounceKey: testutils.AnnounceKeys[2],
+		Info_hash:   testutils.AllowedInfoHashes["b"],
+		Uploaded:    100,
+		Event:       config.Stopped,
+	}
+
+	newSeederRecorder = httptest.NewRecorder()
+	mux.ServeHTTP(newSeederRecorder,
+		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+
+	newSeederRequest = testutils.Request{
+		AnnounceKey: testutils.AnnounceKeys[2],
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+		Numwant:     50,
+	}
+
+	newSeederRecorder = httptest.NewRecorder()
+	mux.ServeHTTP(newSeederRecorder,
+		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+
+	newSeederReceived = countPeersReceived(newSeederRecorder)
+	newSeederExpected = 25
+	if newSeederReceived != newSeederExpected {
+		t.Errorf("bad seeder with ratio of 1: expected %d peers, got %d", newSeederExpected, newSeederReceived)
+	}
+}
+
 // TestPeersForGoodSeedsBigSwarm builds a swarm of 50 seeders, and then tests
 // two new leechers: One with zero torrents seeding, and a second with six
 // total torrents seeding. The expectations for this test are set by the values

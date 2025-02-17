@@ -11,11 +11,15 @@ import (
 )
 
 // The current default algorithm.
-var DefaultAlgorithm = PeersForGoodSeeds
+var DefaultAlgorithm = PeersForRatio
 
-// The minimumPeers to return to a peer, and the minimum target goodSeedCount.
-// Must be greater than zero.
-const minimumPeers int = 5
+// The minimumPeers to return to a peer, and the maximum ratio used
+// in calculations. Rewarding higher ratios is only apt to incentivize
+// cheating.
+const (
+	minimumPeers int     = 5
+	maxRatio     float64 = 2.0
+)
 
 // NumwantPeers is the non-intelligent algorithm which distributes peers up to
 // the number requested by the client, not including themselves.
@@ -234,4 +238,76 @@ func smoothFunction(x, numWanted, goodSeedCount int) int {
 
 	// Rounding up makes testing at the upper bound easier.
 	return int(math.Ceil(y_int + (float64(numWanted)-y_int)*(math.Tanh(k*float64(x)))))
+}
+
+// PeersForRatio tries to exploit all the data tracked in the peers table to
+// calculate how many peers to return. Peers are returned as a function of
+// percentage of seeding torrents and all-time ratio for the peer. Unlike other
+// algorithms, PeersForRatio does not significantly punish new peers; only
+// peers that have accumulated bad stats for some time will receive fewer
+// peers. There may be reasons to initially use PeersForRatio when starting a
+// tracker, and then switch to a different algorithm when swarms mature, since
+// then PeersForRatio can be exploited by users who consistently change their
+// announce URL.
+//
+// The algorithm: 100%+ seeding is always given a full complement of peers.
+// (It's possible to have a seedingPercentage > 1.0 if you have uploaded or
+// cross-seeded torrents.) Otherwise, for the percentage that you are not
+// seeding, the peers count is adjusted by your ratio. To avoid extreme
+// inequalities and to not reward meaninglessly high ratios (which would
+// incentivize cheating), ratio is only counted up to maxRatio.
+func PeersForRatio(conf config.Config, a *config.Announce) (int, error) {
+	var ratio float64
+	var seedPercentage float64
+	query := fmt.Sprintf(`
+		WITH client_announces AS (
+		    SELECT
+			count(info_hash_id) AS seeding
+		    FROM
+			announces
+			INNER JOIN peers ON announces.peers_id = peers.id
+		    WHERE
+			amount_left = 0
+			AND last_announce >= NOW() - INTERVAL '%d seconds'
+			AND event <> $1
+			AND peers.announce_key = $2
+		)
+		SELECT
+		    CASE WHEN downloaded = 0 THEN
+			0
+		    ELSE
+			uploaded / downloaded::float
+		    END,
+		    CASE WHEN snatched = 0 THEN
+			1
+		    ELSE
+			(
+			    SELECT
+				seeding
+			    FROM
+				client_announces) / snatched::float
+		    END
+		FROM
+		    peers
+		WHERE
+		    peers.announce_key = $2
+		`, config.StaleInterval)
+	err := conf.Dbpool.QueryRow(context.Background(), query, config.Stopped, a.Announce_key).Scan(&ratio, &seedPercentage)
+	if err != nil {
+		return 0, fmt.Errorf("error querying for rows: %w", err)
+	}
+
+	// 100% seeding is always rewarded with a full set of peers.
+	if seedPercentage >= 1.0 {
+		return a.Numwant, nil
+	}
+
+	// Otherwise, we scale as a function of seedPercentage
+	numToScale := (1.0 - seedPercentage) * float64(a.Numwant) * max(0, maxRatio-ratio) / maxRatio
+
+	// Return the scaled number to give, clamped between minimumPeers and
+	// the number requested.
+	numToGive := max(minimumPeers, min(a.Numwant, a.Numwant-int(numToScale)))
+
+	return numToGive, nil
 }
