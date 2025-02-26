@@ -255,12 +255,12 @@ func TestInfohashes(t *testing.T) {
 	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
 
-	request := httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
+	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
 		Event:       config.Completed,
 		Left:        0,
-	}), nil)
+	})
 	w := httptest.NewRecorder()
 
 	peerHandler := handler.PeerHandler(conf)
@@ -322,12 +322,12 @@ func TestStats(t *testing.T) {
 	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
 
-	request := httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
+	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
 		Event:       config.Completed,
 		Left:        0,
-	}), nil)
+	})
 	w := httptest.NewRecorder()
 
 	peerHandler := handler.PeerHandler(conf)

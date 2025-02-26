@@ -124,8 +124,7 @@ func TestPeersStatsIncrement(t *testing.T) {
 	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
-		req.SetPathValue("id", r.AnnounceKey)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		handler(w, req)
 	}
@@ -170,7 +169,7 @@ func TestInfohashesDownloadedIncrement(t *testing.T) {
 
 	handler := PeerHandler(conf)
 
-	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
+	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 	handler(w, req)
 
@@ -254,14 +253,13 @@ func TestPeersForSeeds(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	expected := []struct {
@@ -308,14 +306,13 @@ func TestStopped(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -339,13 +336,12 @@ func TestPeersForRatio(t *testing.T) {
 	// Populate 50 seeders
 	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range seeders {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	// Test new bad seeder, they are not currently in the swarm but receive full amount.
@@ -357,8 +353,8 @@ func TestPeersForRatio(t *testing.T) {
 	newSeederExpected := 50
 
 	newSeederRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(newSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+	handler(newSeederRecorder,
+		testutils.CreateTestAnnounce(newSeederRequest))
 
 	newSeederReceived := countPeersReceived(newSeederRecorder)
 	if newSeederReceived != newSeederExpected {
@@ -374,8 +370,8 @@ func TestPeersForRatio(t *testing.T) {
 	}
 
 	newSeederRecorder = httptest.NewRecorder()
-	mux.ServeHTTP(newSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+	handler(newSeederRecorder,
+		testutils.CreateTestAnnounce(newSeederRequest))
 
 	newSeederRequest = testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[2],
@@ -385,8 +381,8 @@ func TestPeersForRatio(t *testing.T) {
 	}
 
 	newSeederRecorder = httptest.NewRecorder()
-	mux.ServeHTTP(newSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+	handler(newSeederRecorder,
+		testutils.CreateTestAnnounce(newSeederRequest))
 
 	newSeederRequest = testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[2],
@@ -395,8 +391,8 @@ func TestPeersForRatio(t *testing.T) {
 	}
 
 	newSeederRecorder = httptest.NewRecorder()
-	mux.ServeHTTP(newSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(newSeederRequest), nil))
+	handler(newSeederRecorder,
+		testutils.CreateTestAnnounce(newSeederRequest))
 
 	newSeederReceived = countPeersReceived(newSeederRecorder)
 	newSeederExpected = 25
@@ -416,13 +412,12 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	// Populate 50 seeders
 	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range seeders {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	// Test bad seeder, they are not currently in the swarm.
@@ -434,8 +429,8 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	badSeederExpected := minimumPeers
 
 	badSeederRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(badSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(badSeederRequest), nil))
+	handler(badSeederRecorder,
+		testutils.CreateTestAnnounce(badSeederRequest))
 
 	badSeederReceived := countPeersReceived(badSeederRecorder)
 	if badSeederReceived != badSeederExpected {
@@ -452,14 +447,14 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 
 	goodSeederSeeds := seedNTorrents(conf, 5, goodSeederRequest.AnnounceKey)
 	for _, r := range goodSeederSeeds {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	goodSeederRecorder := httptest.NewRecorder()
-	mux.ServeHTTP(goodSeederRecorder,
-		httptest.NewRequest("GET", testutils.FormatRequest(goodSeederRequest), nil))
+	handler(goodSeederRecorder,
+		testutils.CreateTestAnnounce(goodSeederRequest))
 
 	goodSeederReceived := countPeersReceived(goodSeederRecorder)
 	if goodSeederReceived != goodSeederExpected {
@@ -515,14 +510,13 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -577,14 +571,13 @@ func TestPeersForAnnounces(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -628,14 +621,13 @@ func TestPeerList(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
 	for _, r := range requests {
-		req := httptest.NewRequest("GET", testutils.FormatRequest(r), nil)
+		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
 		dummyRequests = append(dummyRequests, RequestResponseWrapper{request: req, recorder: w})
-		mux.ServeHTTP(w, req)
+		handler(w, req)
 	}
 
 	lastIndex := len(dummyRequests) - 1
@@ -658,13 +650,12 @@ func TestDenylistInfoHash(t *testing.T) {
 		Port:        6881,
 	}
 
-	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
+	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
-	mux.ServeHTTP(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	data, err := bencode.Decode(resp.Body)
@@ -689,13 +680,12 @@ func TestDisableAllowlist(t *testing.T) {
 		Port:        6881,
 	}
 
-	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
+	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
-	mux.ServeHTTP(w, req)
+	handler(w, req)
 
 	resp := w.Result()
 	data, err := bencode.Decode(resp.Body)
@@ -730,13 +720,12 @@ func TestAnnounceWrite(t *testing.T) {
 		Port:        6881,
 	}
 
-	req := httptest.NewRequest("GET", testutils.FormatRequest(request), nil)
+	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/{id}/announce", PeerHandler(conf))
+	handler := PeerHandler(conf)
 
-	mux.ServeHTTP(w, req)
+	handler(w, req)
 
 	var ip_port []byte
 	var info_hash []byte
@@ -773,5 +762,30 @@ func TestAnnounceWrite(t *testing.T) {
 
 	if !last_announce.Before(time.Now()) || !last_announce.After(time.Now().Add(-time.Second)) {
 		t.Error("last_announce outside one second delta from present")
+	}
+}
+
+func TestUntrackedAnnounce(t *testing.T) {
+	conf := testutils.BuildTestConfig(DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
+
+	handler := PeerHandler(conf)
+
+	req := testutils.CreateTestAnnounce(testutils.Request{
+		AnnounceKey: testutils.UntrackedAnnounceKey,
+		Info_hash:   testutils.AllowedInfoHashes["a"],
+	})
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	resp := w.Result()
+	data, err := bencode.Decode(resp.Body)
+	if err != nil {
+		t.Errorf("failure decoding tracker response: %v", err)
+	}
+
+	if data.(map[string]any)["failure reason"].(string) != "untracked announce key, generate new announce url" {
+		t.Errorf("did not reject untracked announce key")
 	}
 }

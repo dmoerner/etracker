@@ -18,6 +18,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const DefaultTrackerError = "tracker error"
+
+var (
+	ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
+	ErrUntrackedAnnounce  = errors.New("untracked announce key")
+)
+
 // encodeAddr converts a request RemoteAddr in the format x.x.x.x:port into
 // 6-byte compact format expected by BEP 23. The port used is extracted from
 // the client announce; the RemoteAddr port is ignored.
@@ -131,11 +138,22 @@ func parseAnnounce(r *http.Request) (*config.Announce, error) {
 	return &announce, nil
 }
 
-var ErrInfoHashNotAllowed = errors.New("info_hash not in infohashes")
+// checkAnnounce checks announces for two conditions. First, is the announce
+// key being tracked? Second, if the infohash allowlist is enabled, is the infohash
+// allowed (otherwise it is tracked as well).
+func checkAnnounce(conf config.Config, announce *config.Announce) error {
+	var tracked bool
+	err := conf.Dbpool.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1);
+		`,
+		announce.Announce_key).Scan(&tracked)
+	if err != nil {
+		return fmt.Errorf("error checking peers for announce: %w", err)
+	}
+	if !tracked {
+		return ErrUntrackedAnnounce
+	}
 
-// checkInfoHash verifies that an announce is on the allowlist. It returns nil
-// if the infohash is allowed or if DisableAllowlist is true.
-func checkInfoHash(conf config.Config, announce *config.Announce) error {
 	if conf.DisableAllowlist {
 		_, err := conf.Dbpool.Exec(context.Background(), `
 			INSERT INTO infohashes (info_hash, name)
@@ -151,15 +169,15 @@ func checkInfoHash(conf config.Config, announce *config.Announce) error {
 		return nil
 	}
 
-	var b bool
-	err := conf.Dbpool.QueryRow(context.Background(), `
+	var allowed bool
+	err = conf.Dbpool.QueryRow(context.Background(), `
 		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
 		`,
-		announce.Info_hash).Scan(&b)
+		announce.Info_hash).Scan(&allowed)
 	if err != nil {
 		return fmt.Errorf("error checking infohashes: %w", err)
 	}
-	if !b {
+	if !allowed {
 		return ErrInfoHashNotAllowed
 	}
 	return nil
@@ -213,20 +231,21 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 
 	// Update peers table.
 	_, err = conf.Dbpool.Exec(context.Background(), `
-		INSERT INTO peers (announce_key, snatched, uploaded, downloaded)
-		    VALUES ($1, $2, $3, $4)
-		ON CONFLICT (announce_key)
-		    DO UPDATE SET
-			snatched = peers.snatched + EXCLUDED.snatched,
-			uploaded = peers.uploaded + EXCLUDED.uploaded,
-			downloaded = peers.downloaded + EXCLUDED.downloaded
+		UPDATE
+		    peers
+		SET
+		    snatched = snatched + $1,
+		    uploaded = uploaded + $2,
+		    downloaded = downloaded + $3
+		WHERE
+		    announce_key = $4
 		`,
-		announce.Announce_key,
 		completed_snatch,
 		upload_change,
-		download_change)
+		download_change,
+		announce.Announce_key)
 	if err != nil {
-		return fmt.Errorf("error inserting announce_key: %w", err)
+		return fmt.Errorf("error updating peers table: %w", err)
 	}
 
 	// Update infohashes table on completed event.
@@ -339,6 +358,15 @@ func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) er
 	return nil
 }
 
+// writeTrackerError is a helper function which writes a tracker error message
+// to a peer. If there is a failure on right, we log an error.
+func writeTrackerError(msg string, w http.ResponseWriter) {
+	_, err := w.Write(bencode.FailureReason(msg))
+	if err != nil {
+		log.Printf("Error responding to peer: %v", err)
+	}
+}
+
 // PeerHandler encapsulates the handling of each peer request. The first step
 // is to update the peers table with the information in the announce. The
 // second step is to send a bencoded reply.
@@ -354,12 +382,15 @@ func PeerHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		err = checkInfoHash(conf, announce)
-		if errors.Is(err, ErrInfoHashNotAllowed) {
-			_, err = w.Write(bencode.FailureReason("info_hash not in the allowed list"))
-			if err != nil {
-				log.Printf("Error responding to peer: %v", err)
+		err = checkAnnounce(conf, announce)
+		if err != nil {
+			msg := DefaultTrackerError
+			if errors.Is(err, ErrInfoHashNotAllowed) {
+				msg = "info_hash not in the allowed list"
+			} else if errors.Is(err, ErrUntrackedAnnounce) {
+				msg = "untracked announce key, generate new announce url"
 			}
+			writeTrackerError(msg, w)
 			return
 		}
 
@@ -370,12 +401,7 @@ func PeerHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request
 
 		err = writeAnnounce(conf, announce)
 		if err != nil {
-			reason := "tracker error"
-			log.Printf("Error writing announce to db: %v", err)
-			_, err = w.Write(bencode.FailureReason(reason))
-			if err != nil {
-				log.Printf("Error responding to peer: %v", err)
-			}
+			writeTrackerError(DefaultTrackerError, w)
 			return
 
 		}

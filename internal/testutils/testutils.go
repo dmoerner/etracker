@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 
@@ -29,6 +31,8 @@ var AnnounceKeys = map[int]string{
 	5: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 }
 
+const UntrackedAnnounceKey = "000000000000000000000000000000"
+
 type Request struct {
 	AnnounceKey string
 	Info_hash   string
@@ -47,7 +51,7 @@ func GeneratePeerID() string {
 	return string(peer_id)
 }
 
-func FormatRequest(request Request) string {
+func CreateTestAnnounce(request Request) *http.Request {
 	announce := fmt.Sprintf(
 		"http://example.com/%s/announce?peer_id=%s&info_hash=%s&port=%d&numwant=%d&uploaded=%d&downloaded=%d&left=%d",
 		request.AnnounceKey,
@@ -73,7 +77,10 @@ func FormatRequest(request Request) string {
 		announce += fmt.Sprintf("&event=%s", event)
 	}
 
-	return announce
+	newRequest := httptest.NewRequest("GET", announce, nil)
+	newRequest.SetPathValue("id", request.AnnounceKey)
+
+	return newRequest
 }
 
 func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) config.Config {

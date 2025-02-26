@@ -20,12 +20,12 @@ func TestSpecificScrape(t *testing.T) {
 
 	scrapeHandler := ScrapeHandler(conf)
 
-	request := httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
+	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
 		Event:       config.Completed,
 		Left:        0,
-	}), nil)
+	})
 	w := httptest.NewRecorder()
 
 	peerHandler := handler.PeerHandler(conf)
@@ -78,12 +78,12 @@ func TestAllScrape(t *testing.T) {
 		t.Errorf("expected empty swarm scrape %s, got %s", expected, body)
 	}
 
-	request = httptest.NewRequest("GET", testutils.FormatRequest(testutils.Request{
+	request = testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
 		Event:       config.Completed,
 		Left:        0,
-	}), nil)
+	})
 	w = httptest.NewRecorder()
 
 	peerHandler := handler.PeerHandler(conf)
