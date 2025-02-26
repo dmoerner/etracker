@@ -10,6 +10,7 @@ import (
 	"github.com/dmoerner/etracker/internal/api"
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/dmoerner/etracker/internal/handler"
+	"github.com/dmoerner/etracker/internal/prune"
 	"github.com/dmoerner/etracker/internal/scrape"
 )
 
@@ -32,6 +33,13 @@ func serveFrontend(frontendPath string) func(w http.ResponseWriter, r *http.Requ
 
 func main() {
 	conf := config.BuildConfig(handler.DefaultAlgorithm)
+
+	// On startup, prune unused announce keys. This cannot be done
+	// in the config package because it would be a circular dependency.
+	err := prune.PruneAnnounceKeys(conf)
+	if err != nil {
+		log.Fatalf("Error pruning unused announce keys: %v", err)
+	}
 
 	mux := http.NewServeMux()
 

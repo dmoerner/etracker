@@ -33,7 +33,7 @@ function AnnounceURL() {
     <>
       <h2>Announce URL</h2>
 
-      <p>Each user of etracker must use their own announce URL to allow the tracker to track statistics across sessions.</p>
+      <p>Each user of etracker must use their own announce URL to allow the tracker to track statistics across sessions. To accurately report stats, do not merge this announce URL with other announce URLs in the same torrent in your client. Custom announce URLs generated below are pruned 3 months after creation or 3 months after the last announce, whichever is longer.</p>
 
       {announce ? (
         <p>Your saved announce URL: <a href={announce_url}>{announce_url}</a></p>

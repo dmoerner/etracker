@@ -30,11 +30,11 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// an optional license (for verification, moderation, and search).
 	_, err := dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS infohashes (
-		    id serial PRIMARY KEY,
-		    info_hash bytea NOT NULL UNIQUE,
-		    downloaded integer DEFAULT 0 NOT NULL,
-		    name text NOT NULL,
-		    license text
+		    id SERIAL PRIMARY KEY,
+		    info_hash BYTEA NOT NULL UNIQUE,
+		    downloaded INTEGER DEFAULT 0 NOT NULL,
+		    name TEXT NOT NULL,
+		    license TEXT
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes (info_hash);
@@ -49,11 +49,12 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// key is written but not read.
 	_, err = dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS peers (
-		    id serial PRIMARY KEY,
-		    announce_key text NOT NULL UNIQUE,
-		    snatched integer DEFAULT 0 NOT NULL,
-		    downloaded integer DEFAULT 0 NOT NULL,
-		    uploaded integer DEFAULT 0 NOT NULL
+		    id SERIAL PRIMARY KEY,
+		    announce_key TEXT NOT NULL UNIQUE,
+		    snatched INTEGER DEFAULT 0 NOT NULL,
+		    downloaded INTEGER DEFAULT 0 NOT NULL,
+		    uploaded INTEGER DEFAULT 0 NOT NULL,
+		    created_time TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_announce_key ON peers (announce_key);
@@ -68,15 +69,17 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
 	_, err = dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS announces (
-		    id serial PRIMARY KEY,
-		    peers_id integer references peers(id),
-		    ip_port bytea NOT NULL,
-		    info_hash_id integer REFERENCES infohashes (id),
-		    amount_left integer NOT NULL,
-		    downloaded integer NOT NULL,
-		    uploaded integer NOT NULL,
+		    id SERIAL PRIMARY KEY,
+		    peers_id INTEGER,
+		    info_hash_id INTEGER,
+		    ip_port BYTEA NOT NULL,
+		    amount_left INTEGER NOT NULL,
+		    downloaded INTEGER NOT NULL,
+		    uploaded INTEGER NOT NULL,
 		    event INTEGER,
-		    last_announce timestamptz NOT NULL DEFAULT NOW(),
+		    last_announce TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		    CONSTRAINT fk_peers FOREIGN KEY(peers_id) REFERENCES peers(id) ON DELETE CASCADE,
+		    CONSTRAINT fk_infohashes FOREIGN KEY(info_hash_id) REFERENCES infohashes(id) ON DELETE CASCADE,
 		    UNIQUE (peers_id, info_hash_id)
 		);
 
