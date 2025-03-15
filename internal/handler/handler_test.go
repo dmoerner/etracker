@@ -755,7 +755,7 @@ func TestAnnounceWrite(t *testing.T) {
 	// For reasons that are unclear to me, httptest.NewRequest ignores httptest.DefaultNewRequest
 	// and hard-codes this IP instead, following RFC 5737.
 	expectedIpPort.Write([]byte(net.ParseIP("192.0.2.1").To4()))
-	binary.Write(&expectedIpPort, binary.BigEndian, uint16(request.Port))
+	_ = binary.Write(&expectedIpPort, binary.BigEndian, uint16(request.Port))
 	if !bytes.Equal(ip_port, expectedIpPort.Bytes()) {
 		t.Errorf("ip_port: expected %v, got %v", expectedIpPort.Bytes(), ip_port)
 	}

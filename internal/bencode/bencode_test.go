@@ -85,8 +85,8 @@ func TestPeers(t *testing.T) {
 // https://gist.github.com/porjo/f1e6b79af77893ee71e857dfba2f8e9a
 func randomPeer() []byte {
 	var peer bytes.Buffer
-	binary.Write(&peer, binary.BigEndian, rand.Uint32())
-	binary.Write(&peer, binary.BigEndian, uint16(rand.Intn(int(math.Pow(2, 16)))))
+	_ = binary.Write(&peer, binary.BigEndian, rand.Uint32())
+	_ = binary.Write(&peer, binary.BigEndian, uint16(rand.Intn(int(math.Pow(2, 16)))))
 	return peer.Bytes()
 }
 
@@ -98,7 +98,7 @@ var blackhole []byte
 func BenchmarkNonReflect(b *testing.B) {
 	size := 1000
 	data := make([][]byte, 0, size)
-	for i := 0; i < size; i++ {
+	for range size {
 		data = append(data, randomPeer())
 	}
 	for i := 0; i < b.N; i++ {
@@ -110,7 +110,7 @@ func BenchmarkNonReflect(b *testing.B) {
 func BenchmarkReflectLibrary(b *testing.B) {
 	size := 1000
 	data := make([][]byte, 0, size)
-	for i := 0; i < size; i++ {
+	for range size {
 		data = append(data, randomPeer())
 	}
 	for i := 0; i < b.N; i++ {
