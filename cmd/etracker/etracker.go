@@ -60,4 +60,13 @@ func main() {
 	if err := s.ListenAndServe(); err != nil {
 		log.Fatalf("Unable to start HTTP server: %v", err)
 	}
+
+	// Prune old announce keys and announces on a timer.
+	pruneErrCh := make(chan error)
+	prune.PruneTimer(conf, pruneErrCh)
+
+	err = <-pruneErrCh
+	if err != nil {
+		log.Fatalf("Error while pruning on timer: %v", err)
+	}
 }

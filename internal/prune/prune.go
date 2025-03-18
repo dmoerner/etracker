@@ -3,11 +3,15 @@ package prune
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dmoerner/etracker/internal/config"
 )
 
-const PruneIntervalMonths = 3
+const (
+	PruneIntervalMonths     = 3
+	PruneIntervalTimerHours = 24 * 7 // 7 days
+)
 
 // PruneAnnounceKeys removes rows from the peers table, and corresponding
 // announces from the announce table, for announce keys that have not been
@@ -34,4 +38,18 @@ func PruneAnnounceKeys(conf config.Config) error {
 		return fmt.Errorf("error pruning old announce keys: %w", err)
 	}
 	return nil
+}
+
+func PruneTimer(conf config.Config, errCh chan error) {
+	ticker := time.NewTicker(PruneIntervalTimerHours * time.Hour)
+
+	go func() {
+		for range ticker.C {
+			err := PruneAnnounceKeys(conf)
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
+	}()
 }
