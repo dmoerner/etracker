@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	bencode "github.com/jackpal/bencode-go"
 )
 
 type GlobalStats struct {
@@ -54,7 +57,7 @@ func writeError(w http.ResponseWriter, code int, msg MessageJSON) {
 	log.Printf("API Error: %s", msg.Message)
 }
 
-func enableCors(conf config.Config, w *http.ResponseWriter, r *http.Request) {
+func enableCors(conf config.Config, w *http.ResponseWriter, _ *http.Request) {
 	// allowed := []string{conf.FrontendHostname}
 	// origin := r.Header.Get("Origin")
 	(*w).Header().Set("Access-Control-Allow-Origin", conf.FrontendHostname)
@@ -92,6 +95,7 @@ func MuxAPIRoutes(conf config.Config, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/generate", GenerateHandler(conf))
 	mux.HandleFunc("GET /api/infohashes", InfohashesHandler(conf))
 	mux.HandleFunc("POST /api/infohash", PostInfohashHandler(conf))
+	mux.HandleFunc("POST /api/torrentfile", PostTorrentFileHandler(conf))
 	mux.HandleFunc("DELETE /api/infohash", DeleteInfohashHandler(conf))
 }
 
@@ -119,6 +123,88 @@ func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http
 		    VALUES ($1, $2)
 		`,
 			infohash.Info_hash, infohash.Name)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			// 23505: duplicate key insertion error code
+			if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+				writeError(w, http.StatusBadRequest, MessageJSON{"error: infohash already inserted"})
+				return
+			}
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error inserting infohash"})
+			return
+		}
+
+		response, err := json.Marshal(MessageJSON{"success"})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"success posting, but error making response"})
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, "%s", response)
+	}
+}
+
+// PostTorrentFileHandler takes a POST request to the /api/torrentfile endpoint, with
+// the body as a torrent file. It strips out any current announce url and
+// inserts it into the database and returns an appropriate JSON message on
+// success or failure.
+//
+// This is an authorization-only endpoint.
+//
+// Both the PostInfohashHandler and PostTorrentFileHandler endpoints are supported because
+// the former makes testing easier, and may sometimes be convenient for public torrents.
+func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateAPIKey(conf, w, r) {
+			return
+		}
+
+		file, _, err := r.FormFile("file")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not process posted file"})
+			return
+		}
+		defer file.Close()
+
+		data, err := bencode.Decode(file)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not decode posted file"})
+			return
+		}
+
+		// Strip out announce url.
+		data.(map[string]any)["announce"] = ""
+
+		// Ensure private flag is set.
+		data.(map[string]any)["info"].(map[string]any)["private"] = 1
+
+		// Extract name and length.
+		name := data.(map[string]any)["info"].(map[string]any)["name"].(string)
+
+		length := 0
+		if l, ok := data.(map[string]any)["info"].(map[string]any)["length"]; ok {
+			length = l.(int)
+		} else {
+			for _, f := range data.(map[string]any)["info"].(map[string]any)["files"].([]map[string]any) {
+				length += f["length"].(int)
+			}
+		}
+
+		// Calculate info_hash.
+		var b bytes.Buffer
+		err = bencode.Marshal(&b, data.(map[string]any)["info"])
+		if err != nil {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not calculate infohash"})
+			return
+		}
+		info_hash := sha1.Sum(b.Bytes())
+
+		// Write to db.
+		_, err = conf.Dbpool.Exec(context.Background(), `
+		INSERT INTO infohashes (info_hash, name, file, length)
+		    VALUES ($1, $2, $3, $4)
+		`,
+			info_hash, name, data, length)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			// 23505: duplicate key insertion error code

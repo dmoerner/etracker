@@ -30,11 +30,12 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// an optional license (for verification, moderation, and search).
 	_, err := dbpool.Exec(context.Background(), `
 		CREATE TABLE IF NOT EXISTS infohashes (
-		    id SERIAL PRIMARY KEY,
-		    info_hash BYTEA NOT NULL UNIQUE,
-		    downloaded INTEGER DEFAULT 0 NOT NULL,
-		    name TEXT NOT NULL,
-		    license TEXT
+		    id serial PRIMARY KEY,
+		    info_hash bytea NOT NULL UNIQUE,
+		    downloaded integer DEFAULT 0 NOT NULL,
+		    name text NOT NULL,
+		    file bytea,
+		    length integer
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_info_hash ON infohashes (info_hash);
