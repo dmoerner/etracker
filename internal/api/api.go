@@ -176,17 +176,17 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 		data.(map[string]any)["announce"] = ""
 
 		// Ensure private flag is set.
-		data.(map[string]any)["info"].(map[string]any)["private"] = 1
+		data.(map[string]any)["info"].(map[string]any)["private"] = int64(1)
 
 		// Extract name and length.
 		name := data.(map[string]any)["info"].(map[string]any)["name"].(string)
 
-		length := 0
+		var length int64
 		if l, ok := data.(map[string]any)["info"].(map[string]any)["length"]; ok {
-			length = l.(int)
+			length = l.(int64)
 		} else {
-			for _, f := range data.(map[string]any)["info"].(map[string]any)["files"].([]map[string]any) {
-				length += f["length"].(int)
+			for _, f := range data.(map[string]any)["info"].(map[string]any)["files"].([]any) {
+				length += f.(map[string]any)["length"].(int64)
 			}
 		}
 
@@ -199,12 +199,21 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 		}
 		info_hash := sha1.Sum(b.Bytes())
 
+		// Re-encode stripped torrent file.
+		var torrentFile bytes.Buffer
+
+		err = bencode.Marshal(&torrentFile, data)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not construct new torrent file"})
+			return
+		}
+
 		// Write to db.
 		_, err = conf.Dbpool.Exec(context.Background(), `
 		INSERT INTO infohashes (info_hash, name, file, length)
 		    VALUES ($1, $2, $3, $4)
 		`,
-			info_hash, name, data, length)
+			info_hash[:], name, torrentFile.Bytes(), length)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			// 23505: duplicate key insertion error code

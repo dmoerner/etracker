@@ -3,10 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/dmoerner/etracker/internal/config"
@@ -390,5 +393,75 @@ func TestGenerate(t *testing.T) {
 
 	if !written {
 		t.Errorf("key %s not written to database", received.Announce_key)
+	}
+}
+
+func TestInsertTorrentFile(t *testing.T) {
+	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(conf)
+
+	handler := PostTorrentFileHandler(conf)
+
+	// These info_hashes are hard-coded, by manually constructing a stripped
+	// torrent file and extracting the info_hash.
+	data := []struct {
+		name      string
+		file      string
+		info_hash string
+	}{
+		{"single file", "./test_files/singlefile.txt.torrent", "07d3b124456aea33187e832e4c3c046fd94dde9a"},
+		{"multi file", "./test_files/multifile.torrent", "d77f2817a93fe9e98eff809202fc898d4d812f11"},
+	}
+
+	for _, d := range data {
+		t.Run(d.name, func(t *testing.T) {
+			info_hash, err := hex.DecodeString(d.info_hash)
+			if err != nil {
+				t.Fatalf("could not convert hardcoded hex infohash: %v", err)
+			}
+
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+
+			filePart, err := writer.CreateFormFile("file", d.file)
+			if err != nil {
+				t.Fatalf("could not create multipart writer from file: %v", err)
+			}
+
+			f, err := os.Open(d.file)
+			if err != nil {
+				t.Fatalf("could not open file: %v", err)
+			}
+
+			_, err = io.Copy(filePart, f)
+			if err != nil {
+				t.Fatalf("could not copy file content: %v", err)
+			}
+
+			err = writer.Close()
+			if err != nil {
+				t.Fatalf("failed to close multipart writer: %v", err)
+			}
+
+			request := httptest.NewRequest(http.MethodPost, "https://example.com/api/torrentfile/", body)
+			request.Header.Add("Authorization", testutils.DefaultAPIKey)
+			request.Header.Add("Content-Type", writer.FormDataContentType())
+			w := httptest.NewRecorder()
+
+			handler(w, request)
+
+			var added bool
+			err = conf.Dbpool.QueryRow(context.Background(), `
+		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1)
+		`,
+				info_hash).Scan(&added)
+			if err != nil {
+				t.Errorf("error: could not check database for added hash: %v", err)
+			}
+
+			if !added {
+				t.Errorf("info_hash %s was not added to database", info_hash)
+			}
+		})
 	}
 }
