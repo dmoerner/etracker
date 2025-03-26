@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -396,39 +397,47 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
-func TestInsertTorrentFile(t *testing.T) {
+// The TorrentFile POST and GET endpoints are tested together: First POST samples,
+// then verify that you can GET them with the announce keys and private flag
+// rewritten.
+func TestPostGetTorrentFile(t *testing.T) {
 	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
 	defer testutils.TeardownTest(conf)
 
-	handler := PostTorrentFileHandler(conf)
+	postHandler := PostTorrentFileHandler(conf)
+	getHandler := GetTorrentFileHandler(conf)
 
 	// These info_hashes are hard-coded, by manually constructing a stripped
 	// torrent file and extracting the info_hash.
 	data := []struct {
-		name      string
-		file      string
-		info_hash string
+		name             string
+		post_file        string
+		announce_key     string
+		stored_info_hash string
+		get_file         string
 	}{
-		{"single file", "./test_files/singlefile.txt.torrent", "07d3b124456aea33187e832e4c3c046fd94dde9a"},
-		{"multi file", "./test_files/multifile.torrent", "d77f2817a93fe9e98eff809202fc898d4d812f11"},
+		{"single file", "./test_files/post/singlefile.txt.torrent", testutils.AnnounceKeys[1], "07d3b124456aea33187e832e4c3c046fd94dde9a", "./test_files/get/singlefile.txt.torrent"},
+		{"multi file", "./test_files/post/multifile.torrent", testutils.AnnounceKeys[1], "d77f2817a93fe9e98eff809202fc898d4d812f11", "./test_files/get/multifile.torrent"},
 	}
 
 	for _, d := range data {
 		t.Run(d.name, func(t *testing.T) {
-			info_hash, err := hex.DecodeString(d.info_hash)
+			info_hash, err := hex.DecodeString(d.stored_info_hash)
 			if err != nil {
 				t.Fatalf("could not convert hardcoded hex infohash: %v", err)
 			}
 
+			// Test POST method.
+
 			body := &bytes.Buffer{}
 			writer := multipart.NewWriter(body)
 
-			filePart, err := writer.CreateFormFile("file", d.file)
+			filePart, err := writer.CreateFormFile("file", d.post_file)
 			if err != nil {
 				t.Fatalf("could not create multipart writer from file: %v", err)
 			}
 
-			f, err := os.Open(d.file)
+			f, err := os.Open(d.post_file)
 			if err != nil {
 				t.Fatalf("could not open file: %v", err)
 			}
@@ -448,12 +457,12 @@ func TestInsertTorrentFile(t *testing.T) {
 			request.Header.Add("Content-Type", writer.FormDataContentType())
 			w := httptest.NewRecorder()
 
-			handler(w, request)
+			postHandler(w, request)
 
 			var added bool
 			err = conf.Dbpool.QueryRow(context.Background(), `
-		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1)
-		`,
+				SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1)
+				`,
 				info_hash).Scan(&added)
 			if err != nil {
 				t.Errorf("error: could not check database for added hash: %v", err)
@@ -462,6 +471,62 @@ func TestInsertTorrentFile(t *testing.T) {
 			if !added {
 				t.Errorf("info_hash %s was not added to database", info_hash)
 			}
+
+			// Test GET method.
+
+			request = httptest.NewRequest(http.MethodGet, fmt.Sprintf("https://example.com/api/torrentfile?announce_key=%s&info_hash=%s", d.announce_key, d.stored_info_hash), nil)
+			w = httptest.NewRecorder()
+
+			getHandler(w, request)
+
+			received_file, _ := io.ReadAll(w.Result().Body)
+
+			expected, err := os.ReadFile(d.get_file)
+			if err != nil {
+				t.Fatalf("could not read torrent file: %v", err)
+			}
+
+			if !bytes.Equal(expected, received_file) {
+				t.Errorf("Did not receive expected torrent file. Expected: %s, Received: %s", expected, received_file)
+			}
 		})
 	}
 }
+
+// func TestGetTorrentFile(t *testing.T) {
+// 	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
+// 	defer testutils.TeardownTest(conf)
+//
+// 	handler := GetTorrentFileHandler(conf)
+//
+// 	// These info_hashes are hard-coded, by manually constructing a stripped
+// 	// torrent file and extracting the info_hash.
+// 	data := []struct {
+// 		name         string
+// 		announce_key string
+// 		info_hash    string
+// 		file         string
+// 	}{
+// 		{"single file", testutils.AnnounceKeys[1], "07d3b124456aea33187e832e4c3c046fd94dde9a", "./test_files/get/singlefile.txt.torrent"},
+// 	}
+//
+// 	for _, d := range data {
+// 		t.Run(d.name, func(t *testing.T) {
+// 			request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("https://example.com/api/torrentfile?announce_key=%s&info_hash=%s", d.announce_key, d.info_hash), nil)
+// 			w := httptest.NewRecorder()
+//
+// 			handler(w, request)
+//
+// 			body, _ := io.ReadAll(w.Result().Body)
+//
+// 			expected, err := os.ReadFile(d.file)
+// 			if err != nil {
+// 				t.Fatalf("could not read torrent file: %v", err)
+// 			}
+//
+// 			if !bytes.Equal(expected, body) {
+// 				t.Errorf("Did not receive expected torrent file. Expected: %s, Received: %s", expected, body)
+// 			}
+// 		})
+// 	}
+// }

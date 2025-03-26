@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha1"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -96,6 +97,7 @@ func MuxAPIRoutes(conf config.Config, mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/infohashes", InfohashesHandler(conf))
 	mux.HandleFunc("POST /api/infohash", PostInfohashHandler(conf))
 	mux.HandleFunc("POST /api/torrentfile", PostTorrentFileHandler(conf))
+	mux.HandleFunc("GET /api/torrentfile", GetTorrentFileHandler(conf))
 	mux.HandleFunc("DELETE /api/infohash", DeleteInfohashHandler(conf))
 }
 
@@ -194,7 +196,7 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 		var b bytes.Buffer
 		err = bencode.Marshal(&b, data.(map[string]any)["info"])
 		if err != nil {
-			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not calculate infohash"})
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not calculate infohash"})
 			return
 		}
 		info_hash := sha1.Sum(b.Bytes())
@@ -204,7 +206,7 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 
 		err = bencode.Marshal(&torrentFile, data)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not construct new torrent file"})
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not construct new torrent file"})
 			return
 		}
 
@@ -400,6 +402,7 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// GenerateHandler returns a new announce key.
 func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		enableCors(conf, &w, r)
@@ -416,5 +419,93 @@ func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Req
 			return
 		}
 		fmt.Fprintf(w, "%s", result)
+	}
+}
+
+// GetTorrentFileHandler takes a GET request with an announce_key and info_hash query fields.
+// If the announce_key is registered and the info_hash is present in the database,
+// it returns a new torrent file with the appropriate announce URL.
+func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+
+		// Validate announce_key
+		announce_key := query.Get("announce_key")
+		if announce_key == "" {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: no announce key provided in query"})
+			return
+		}
+
+		var ok bool
+		err := conf.Dbpool.QueryRow(context.Background(), `
+			SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1)
+			`,
+			announce_key).Scan(&ok)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to validate announce key"})
+			return
+		}
+
+		if !ok {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: invalid announce key"})
+			return
+		}
+
+		// Process info_hash
+		info_hash_hex := query.Get("info_hash")
+
+		if info_hash_hex == "" {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: no infohash provided in query"})
+			return
+		}
+
+		info_hash, err := hex.DecodeString(info_hash_hex)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: could not decode hex info_hash"})
+		}
+
+		var stripped_torrent_file []byte
+
+		err = conf.Dbpool.QueryRow(context.Background(), `
+			SELECT file FROM infohashes WHERE info_hash = $1 AND file IS NOT NULL
+			`,
+			info_hash).Scan(&stripped_torrent_file)
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to fetch torrent file from db"})
+				return
+			}
+			writeError(w, http.StatusBadRequest, MessageJSON{"error: no matching infohash with stored torrent file"})
+			return
+		}
+
+		data, err := bencode.Decode(bytes.NewReader(stripped_torrent_file))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: unable to decode torrent file in db"})
+			return
+		}
+
+		u := r.URL
+		u.Path = ""
+		u.RawQuery = ""
+		u.Fragment = ""
+
+		announce_url := u.JoinPath(announce_key, "announce")
+
+		data.(map[string]any)["announce"] = announce_url.String()
+
+		var torrent_file bytes.Buffer
+		err = bencode.Marshal(&torrent_file, data)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not construct new torrent file"})
+			log.Print(err)
+			return
+		}
+
+		_, err = w.Write(torrent_file.Bytes())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not send torrent file"})
+			return
+		}
 	}
 }
