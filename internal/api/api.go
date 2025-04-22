@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"path/filepath"
 
 	"github.com/dmoerner/etracker/internal/config"
@@ -425,6 +426,8 @@ func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Req
 // GetTorrentFileHandler takes a GET request with an announce_key and info_hash query fields.
 // If the announce_key is registered and the info_hash is present in the database,
 // it returns a new torrent file with the appropriate announce URL.
+//
+// The info_hash is expected to be hex-encoded.
 func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
@@ -485,10 +488,15 @@ func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *ht
 			return
 		}
 
-		u := r.URL
-		u.Path = ""
-		u.RawQuery = ""
-		u.Fragment = ""
+		// Build a clean and complete announce URL.
+		u := &url.URL{
+			Scheme: "http",
+			Host:   r.Host,
+		}
+
+		if r.TLS != nil {
+			u.Scheme = "https"
+		}
 
 		announce_url := u.JoinPath(announce_key, "announce")
 
