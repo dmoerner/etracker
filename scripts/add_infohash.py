@@ -7,6 +7,7 @@ import argparse
 import base64
 import bencoder
 import hashlib
+import os
 import requests
 
 
@@ -32,6 +33,19 @@ def post_infohash(hostname, apikey, info_hash, name):
     r = requests.post(url, headers={"Authorization": apikey}, json=body, verify=verify)
     return r
 
+def post_torrent(hostname, apikey, filename):
+    headers={"Authorization": apikey}
+    url = f"{hostname}/api/torrentfile"
+    with open(filename, "rb") as f:
+        files = {
+            'file': (os.path.basename(filename), f, 'application/x-bittorrent')
+        }
+        verify = True
+        if "localhost" in hostname or "127.0.0.1" in hostname:
+            verify = False
+        r = requests.post(url, headers=headers, files=files, verify=verify)
+        return r
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -45,9 +59,10 @@ def main():
 
     args = parser.parse_args()
 
-    info_hash, name = parse_torrent(args.torrentfile)
+    # info_hash, name = parse_torrent(args.torrentfile)
 
-    result = post_infohash(args.hostname, args.apikey, info_hash, name)
+    # result = post_infohash(args.hostname, args.apikey, info_hash, name)
+    result = post_torrent(args.hostname, args.apikey, args.torrentfile)
     print(f"{result.status_code}, {result.json()}")
 
 
