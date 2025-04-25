@@ -112,7 +112,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 	}
 
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6739",
+		Addr:     "localhost:6379",
 		Password: redis_password,
 		DB:       0,
 	})

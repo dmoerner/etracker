@@ -13,5 +13,5 @@ dev:
 
 # Tests are not concurrent-safe at this time.
 test:
-	$(DOCKER) compose -f compose.yaml up -d etracker_pg_test
+	$(DOCKER) compose -f compose.yaml up -d etracker_pg_test etracker_redis
 	go test -p 1 --count=1 ./...
