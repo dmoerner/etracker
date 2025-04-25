@@ -16,6 +16,13 @@ services:
     ports:
       - 3000:3000
 
+  etracker_redis:
+    image: redis:7.2
+    container_name: etracker_redis
+    ports:
+      - 6379:6379
+    command: redis-server --requirepass ${ETRACKER_REDIS}
+
   etracker_pg:
     image: postgres:17
     container_name: etracker_pg

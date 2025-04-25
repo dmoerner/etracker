@@ -12,6 +12,7 @@ import (
 
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/dmoerner/etracker/internal/db"
+	"github.com/redis/go-redis/v9"
 )
 
 const DefaultAPIKey = "testauthorizationkey"
@@ -94,6 +95,17 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	os.Setenv("PGPORT", "5431")
 	os.Setenv("PGHOST", "localhost")
 
+	redis_password, ok := os.LookupEnv("ETRACKER_REDIS")
+	if !ok {
+		log.Fatal("ETRACKER_REDIS not set in environment.")
+	}
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6739",
+		Password: redis_password,
+		DB:       0,
+	})
+
 	dbpool, err := db.DbConnect()
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
@@ -140,6 +152,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 		Algorithm:     algorithm,
 		Authorization: authorization,
 		Dbpool:        dbpool,
+		Rdb:           rdb,
 	}
 
 	return conf

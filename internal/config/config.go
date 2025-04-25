@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 type Event int
@@ -50,6 +51,7 @@ type Config struct {
 	Algorithm        PeeringAlgorithm
 	Authorization    string
 	Dbpool           *pgxpool.Pool
+	Rdb              *redis.Client
 	BackendPort      int
 	DisableAllowlist bool
 	FrontendHostname string
@@ -104,6 +106,17 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		log.Fatal("PGPASSWORD not set in environment.")
 	}
 
+	redis_password, ok := os.LookupEnv("ETRACKER_REDIS")
+	if !ok {
+		log.Fatal("ETRACKER_REDIS not set in environment.")
+	}
+
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6739",
+		Password: redis_password,
+		DB:       0,
+	})
+
 	// An empty authorization string in the config means the API is forbidden.
 	// It is the responsibility of functions who use this struct key to forbid this.
 	authorization, ok := os.LookupEnv("ETRACKER_AUTHORIZATION")
@@ -142,6 +155,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		Algorithm:        algorithm,
 		Authorization:    authorization,
 		Dbpool:           dbpool,
+		Rdb:              rdb,
 		BackendPort:      backendPort,
 		DisableAllowlist: disableAllowlist,
 		FrontendHostname: frontendHostname,
