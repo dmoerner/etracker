@@ -24,6 +24,9 @@ Features & goals:
 The intended upshot of these features is to encourage healthy swarms with
 long-term seeding, without the use of a required minimum ratio.
 
+`etracker` is implemented with a Go backend, using Postgres and Redis, and a
+React frontend.
+
 `etracker` is distributed without copyright under the Unlicense:
 https://unlicense.org/.
 
@@ -36,6 +39,7 @@ $ export PGUSER="etracker_pguser"
 $ export PGPASSWORD="etracker_secretpgpassword"
 $ export ETRACKER_AUTHORIZATION="mysupersecretapikey"
 $ export ETRACKER_FRONTEND_HOSTNAME="example.com"
+$ export ETRACKER_REDIS="etracker_secretredispassword"
 $ docker build . -t user/etracker
 $ docker compose up -d etracker
 ```
