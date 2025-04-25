@@ -114,8 +114,11 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: redis_password,
-		DB:       0,
+		DB:       0, // Production DB
 	})
+
+	// Flush Redis DB on startup, we always want a fresh cache.
+	rdb.FlushDB(context.Background())
 
 	// An empty authorization string in the config means the API is forbidden.
 	// It is the responsibility of functions who use this struct key to forbid this.

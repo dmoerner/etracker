@@ -103,8 +103,11 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: redis_password,
-		DB:       0,
+		DB:       1, // testing DB
 	})
+
+	// Always flush testing database before each run.
+	rdb.FlushDB(context.Background())
 
 	dbpool, err := db.DbConnect()
 	if err != nil {
