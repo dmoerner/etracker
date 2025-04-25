@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -32,11 +33,13 @@ func serveFrontend(frontendPath string) func(w http.ResponseWriter, r *http.Requ
 }
 
 func main() {
-	conf := config.BuildConfig(handler.DefaultAlgorithm)
+	ctx := context.Background()
+
+	conf := config.BuildConfig(ctx, handler.DefaultAlgorithm)
 
 	// On startup, prune unused announce keys. This cannot be done
 	// in the config package because it would be a circular dependency.
-	err := prune.PruneAnnounceKeys(conf)
+	err := prune.PruneAnnounceKeys(ctx, conf)
 	if err != nil {
 		log.Fatalf("Error pruning unused announce keys: %v", err)
 	}
@@ -45,10 +48,10 @@ func main() {
 
 	mux.HandleFunc("/", serveFrontend("./frontend/dist"))
 
-	api.MuxAPIRoutes(conf, mux)
+	api.MuxAPIRoutes(ctx, conf, mux)
 
-	mux.HandleFunc("GET /{id}/announce", handler.PeerHandler(conf))
-	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(conf))
+	mux.HandleFunc("GET /{id}/announce", handler.PeerHandler(ctx, conf))
+	mux.HandleFunc("GET /{id}/scrape", scrape.ScrapeHandler(ctx, conf))
 
 	s := &http.Server{
 		Addr:              fmt.Sprintf("localhost:%d", conf.BackendPort),
@@ -63,7 +66,7 @@ func main() {
 
 	// Prune old announce keys and announces on a timer.
 	pruneErrCh := make(chan error)
-	prune.PruneTimer(conf, pruneErrCh)
+	prune.PruneTimer(ctx, conf, pruneErrCh)
 
 	err = <-pruneErrCh
 	if err != nil {

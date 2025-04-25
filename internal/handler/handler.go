@@ -145,16 +145,16 @@ func parseAnnounce(r *http.Request) (*config.Announce, error) {
 //
 // Everything in checkAnnounce is stored in the Redis cache as a persistent key, since
 // these values change at most once during the runtime of the tracker.
-func checkAnnounce(conf config.Config, announce *config.Announce) error {
+func checkAnnounce(ctx context.Context, conf config.Config, announce *config.Announce) error {
 	tracked := true
-	tracked_cache, err := conf.Rdb.Get(context.Background(), "announce:"+announce.Announce_key).Result()
+	tracked_cache, err := conf.Rdb.Get(ctx, "announce:"+announce.Announce_key).Result()
 	if err != nil {
 		// Cache miss or failure
 		if err != redis.Nil {
 			// An issue with the cache must be logged but is not fatal.
 			log.Printf("Error fetching announce keys from cache: %v", err)
 		}
-		err = conf.Dbpool.QueryRow(context.Background(), `
+		err = conf.Dbpool.QueryRow(ctx, `
 			SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1);
 			`,
 			announce.Announce_key).Scan(&tracked)
@@ -166,7 +166,7 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 		} else {
 			tracked_cache = "false"
 		}
-		err = conf.Rdb.Set(context.Background(), "announce:"+announce.Announce_key, tracked_cache, 0).Err()
+		err = conf.Rdb.Set(ctx, "announce:"+announce.Announce_key, tracked_cache, 0).Err()
 		if err != nil {
 			// An issue with the cache must be logged but is not fatal.
 			log.Printf("Error setting announce keys in cache: %v", err)
@@ -181,19 +181,19 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 
 	if conf.DisableAllowlist {
-		err = conf.Rdb.Get(context.Background(), "info_hash:"+string(announce.Info_hash)).Err()
+		err = conf.Rdb.Get(ctx, "info_hash:"+string(announce.Info_hash)).Err()
 		if err != nil {
 			// Cache miss or failure
 			if err != redis.Nil {
 				// An issue with the cache must be logged but is not fatal.
 				log.Printf("Error fetching info_hash from cache: %v", err)
 			}
-			err = conf.Rdb.Set(context.Background(), "info_hash:"+string(announce.Info_hash), "true", 0).Err()
+			err = conf.Rdb.Set(ctx, "info_hash:"+string(announce.Info_hash), "true", 0).Err()
 			if err != nil {
 				// An issue with the cache must be logged but is not fatal.
 				log.Printf("Error setting info_hash in cache: %v", err)
 			}
-			_, err = conf.Dbpool.Exec(context.Background(), `
+			_, err = conf.Dbpool.Exec(ctx, `
 			INSERT INTO infohashes (info_hash, name)
 			    VALUES ($1, $2)
 			ON CONFLICT (info_hash)
@@ -209,13 +209,13 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 
 	allowed := true
-	allowed_cache, err := conf.Rdb.Get(context.Background(), "info_hash:"+string(announce.Info_hash)).Result()
+	allowed_cache, err := conf.Rdb.Get(ctx, "info_hash:"+string(announce.Info_hash)).Result()
 	if err != nil {
 		if err != redis.Nil {
 			// An issue with the cache must be logged but is not fatal.
 			log.Printf("Error fetching info_hash keys from cache: %v", err)
 		}
-		err = conf.Dbpool.QueryRow(context.Background(), `
+		err = conf.Dbpool.QueryRow(ctx, `
 			SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
 			`,
 			announce.Info_hash).Scan(&allowed)
@@ -227,7 +227,7 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 		} else {
 			allowed_cache = "false"
 		}
-		err = conf.Rdb.Set(context.Background(), "info_hash:"+string(announce.Info_hash), allowed_cache, 0).Err()
+		err = conf.Rdb.Set(ctx, "info_hash:"+string(announce.Info_hash), allowed_cache, 0).Err()
 		if err != nil {
 			// An issue with the cache must be logged but is not fatal.
 			log.Printf("Error setting info_hash keys in cache: %v", err)
@@ -242,7 +242,7 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 
 	// var allowed bool
-	// err = conf.Dbpool.QueryRow(context.Background(), `
+	// err = conf.Dbpool.QueryRow(ctx, `
 	// 	SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
 	// 	`,
 	// 	announce.Info_hash).Scan(&allowed)
@@ -256,11 +256,11 @@ func checkAnnounce(conf config.Config, announce *config.Announce) error {
 }
 
 // writeAnnounce updates the peers table with an announce.
-func writeAnnounce(conf config.Config, announce *config.Announce) error {
+func writeAnnounce(ctx context.Context, conf config.Config, announce *config.Announce) error {
 	// Calculate most recent upload change.
 	var last_uploaded int
 	var last_downloaded int
-	err := conf.Dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(ctx, `
 		SELECT
 		    announces.uploaded, announces.downloaded
 		FROM
@@ -302,7 +302,7 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 
 	// Update peers table.
-	_, err = conf.Dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(ctx, `
 		UPDATE
 		    peers
 		SET
@@ -322,7 +322,7 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 
 	// Update infohashes table on completed event.
 	if announce.Event == config.Completed {
-		_, err = conf.Dbpool.Exec(context.Background(), `
+		_, err = conf.Dbpool.Exec(ctx, `
 			UPDATE
 			    infohashes
 			SET
@@ -337,7 +337,7 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 	}
 
 	// Update announces table
-	_, err = conf.Dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(ctx, `
 		INSERT INTO announces (peers_id, info_hash_id, ip_port, amount_left, uploaded, downloaded, event)
 		SELECT
 		    peers.id,
@@ -381,7 +381,7 @@ func writeAnnounce(conf config.Config, announce *config.Announce) error {
 // PostgreSQL doesn't substitute inside of string literals, so to use a variable
 // for the interval, we need to use fmt.Sprintf in an intermediate step. See further:
 // https://github.com/jackc/pgx/issues/1043
-func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) error {
+func sendReply(ctx context.Context, conf config.Config, w http.ResponseWriter, a *config.Announce) error {
 	query := fmt.Sprintf(`
 		SELECT DISTINCT ON (announce_key)
 		    ip_port
@@ -399,7 +399,7 @@ func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) er
 		    last_announce DESC
 		`,
 		config.StaleInterval)
-	rows, err := conf.Dbpool.Query(context.Background(), query, a.Info_hash, a.Announce_key, config.Stopped)
+	rows, err := conf.Dbpool.Query(ctx, query, a.Info_hash, a.Announce_key, config.Stopped)
 	if err != nil {
 		return fmt.Errorf("error selecting peer rows: %w", err)
 	}
@@ -410,7 +410,7 @@ func sendReply(conf config.Config, w http.ResponseWriter, a *config.Announce) er
 		return fmt.Errorf("error collecting rows: %w", err)
 	}
 
-	numToGive, err := conf.Algorithm(conf, a)
+	numToGive, err := conf.Algorithm(ctx, conf, a)
 	if err != nil {
 		return fmt.Errorf("error calculating number of peers to give: %w", err)
 	}
@@ -442,7 +442,7 @@ func writeTrackerError(msg string, w http.ResponseWriter) {
 // PeerHandler encapsulates the handling of each peer request. The first step
 // is to update the peers table with the information in the announce. The
 // second step is to send a bencoded reply.
-func PeerHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func PeerHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		announce, err := parseAnnounce(r)
 		if err != nil {
@@ -454,7 +454,7 @@ func PeerHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		err = checkAnnounce(conf, announce)
+		err = checkAnnounce(ctx, conf, announce)
 		if err != nil {
 			msg := DefaultTrackerError
 			if errors.Is(err, ErrInfoHashNotAllowed) {
@@ -466,12 +466,12 @@ func PeerHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request
 			return
 		}
 
-		err = sendReply(conf, w, announce)
+		err = sendReply(ctx, conf, w, announce)
 		if err != nil {
 			log.Printf("Error responding to peer: %v", err)
 		}
 
-		err = writeAnnounce(conf, announce)
+		err = writeAnnounce(ctx, conf, announce)
 		if err != nil {
 			writeTrackerError(DefaultTrackerError, w)
 			return

@@ -38,7 +38,7 @@ func abortScrape(w http.ResponseWriter, reason string) {
 // Query is constructed in three stages, since SQL requires inserting the
 // optional WHERE specification for specific infohashes in the middle of the
 // query.
-func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func ScrapeHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Start constructing query.
 		query := fmt.Sprintf(`
@@ -101,7 +101,7 @@ func ScrapeHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reque
 			`
 		// Finished constructing query.
 
-		rows, err := conf.Dbpool.Query(context.Background(), query, paramsSlice...)
+		rows, err := conf.Dbpool.Query(ctx, query, paramsSlice...)
 		if err != nil {
 			log.Printf("Error fetching data for scrape: %v", err)
 			abortScrape(w, "error fetching data for scrape")

@@ -11,8 +11,9 @@ import (
 )
 
 func TestOldCreationOldAnnounces(t *testing.T) {
-	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -23,12 +24,12 @@ func TestOldCreationOldAnnounces(t *testing.T) {
 		    announce_key = $1
 		`, PruneIntervalMonths+1)
 
-	_, err := conf.Dbpool.Exec(context.Background(), query, testutils.AnnounceKeys[1])
+	_, err := conf.Dbpool.Exec(ctx, query, testutils.AnnounceKeys[1])
 	if err != nil {
 		t.Errorf("error setting fake key created time: %v", err)
 	}
 
-	handler := handler.PeerHandler(conf)
+	handler := handler.PeerHandler(ctx, conf)
 	req := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
@@ -48,18 +49,18 @@ func TestOldCreationOldAnnounces(t *testing.T) {
 		    last_announce = last_announce - INTERVAL '%d months';
 		`, PruneIntervalMonths+1)
 
-	_, err = conf.Dbpool.Exec(context.Background(), query)
+	_, err = conf.Dbpool.Exec(ctx, query)
 	if err != nil {
 		t.Errorf("error setting fake key created time: %v", err)
 	}
 
-	err = PruneAnnounceKeys(conf)
+	err = PruneAnnounceKeys(ctx, conf)
 	if err != nil {
 		t.Errorf("error pruning announce keys: %v", err)
 	}
 
 	var tracked_keys int
-	err = conf.Dbpool.QueryRow(context.Background(), `
+	err = conf.Dbpool.QueryRow(ctx, `
 		SELECT COUNT(announce_key) FROM peers
 		`).Scan(&tracked_keys)
 	if err != nil {
@@ -74,8 +75,9 @@ func TestOldCreationOldAnnounces(t *testing.T) {
 }
 
 func TestOldCreationRecentAnnounces(t *testing.T) {
-	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -86,12 +88,12 @@ func TestOldCreationRecentAnnounces(t *testing.T) {
 		    announce_key = $1
 		`, PruneIntervalMonths+1)
 
-	_, err := conf.Dbpool.Exec(context.Background(), query, testutils.AnnounceKeys[1])
+	_, err := conf.Dbpool.Exec(ctx, query, testutils.AnnounceKeys[1])
 	if err != nil {
 		t.Errorf("error setting fake key created time: %v", err)
 	}
 
-	handler := handler.PeerHandler(conf)
+	handler := handler.PeerHandler(ctx, conf)
 	req := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
 		Info_hash:   testutils.AllowedInfoHashes["a"],
@@ -100,13 +102,13 @@ func TestOldCreationRecentAnnounces(t *testing.T) {
 
 	handler(w, req)
 
-	err = PruneAnnounceKeys(conf)
+	err = PruneAnnounceKeys(ctx, conf)
 	if err != nil {
 		t.Errorf("error pruning announce keys: %v", err)
 	}
 
 	var tracked_keys int
-	err = conf.Dbpool.QueryRow(context.Background(), `
+	err = conf.Dbpool.QueryRow(ctx, `
 		SELECT COUNT(announce_key) FROM peers
 		`).Scan(&tracked_keys)
 	if err != nil {
@@ -121,8 +123,9 @@ func TestOldCreationRecentAnnounces(t *testing.T) {
 }
 
 func TestOldCreationNoAnnounces(t *testing.T) {
-	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -133,18 +136,18 @@ func TestOldCreationNoAnnounces(t *testing.T) {
 		    announce_key = $1
 		`, PruneIntervalMonths+1)
 
-	_, err := conf.Dbpool.Exec(context.Background(), query, testutils.AnnounceKeys[1])
+	_, err := conf.Dbpool.Exec(ctx, query, testutils.AnnounceKeys[1])
 	if err != nil {
 		t.Errorf("error setting fake key created time: %v", err)
 	}
 
-	err = PruneAnnounceKeys(conf)
+	err = PruneAnnounceKeys(ctx, conf)
 	if err != nil {
 		t.Errorf("error pruning announce keys: %v", err)
 	}
 
 	var tracked_keys int
-	err = conf.Dbpool.QueryRow(context.Background(), `
+	err = conf.Dbpool.QueryRow(ctx, `
 		SELECT COUNT(announce_key) FROM peers
 		`).Scan(&tracked_keys)
 	if err != nil {
@@ -159,16 +162,17 @@ func TestOldCreationNoAnnounces(t *testing.T) {
 }
 
 func TestRecentCreationNoAnnounces(t *testing.T) {
-	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
-	err := PruneAnnounceKeys(conf)
+	err := PruneAnnounceKeys(ctx, conf)
 	if err != nil {
 		t.Errorf("error pruning announce keys: %v", err)
 	}
 
 	var tracked_keys int
-	err = conf.Dbpool.QueryRow(context.Background(), `
+	err = conf.Dbpool.QueryRow(ctx, `
 		SELECT COUNT(announce_key) FROM peers
 		`).Scan(&tracked_keys)
 	if err != nil {

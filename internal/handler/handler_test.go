@@ -31,11 +31,11 @@ const (
 // createNSeeders is a helper function which creates n request structs for a
 // specified info_hash. Used to populate the handler with many existing
 // seeders.
-func createNSeeders(conf config.Config, n int, info_hash string) []testutils.Request {
+func createNSeeders(ctx context.Context, conf config.Config, n int, info_hash string) []testutils.Request {
 	var requests []testutils.Request
 
 	for range n {
-		announce_key, err := config.GenerateAnnounceKey(conf)
+		announce_key, err := config.GenerateAnnounceKey(ctx, conf)
 		if err != nil {
 			log.Fatalf("createNSeeders: Unable to generate announce keys: %v", err)
 		}
@@ -52,13 +52,13 @@ func createNSeeders(conf config.Config, n int, info_hash string) []testutils.Req
 // info_hashes to a particular announce_key. This also requires inserting these
 // info_hashes into the allowlist in the test db. Used to mimic good or bad
 // seeding behavior.
-func seedNTorrents(conf config.Config, n int, announce_key string) []testutils.Request {
+func seedNTorrents(ctx context.Context, conf config.Config, n int, announce_key string) []testutils.Request {
 	var requests []testutils.Request
 
 	for i := range n {
 		info_hash := make([]byte, 20)
 		_, _ = rand.Read(info_hash)
-		_, err := conf.Dbpool.Exec(context.Background(), `
+		_, err := conf.Dbpool.Exec(ctx, `
 			INSERT INTO infohashes (info_hash, name)
 			    VALUES ($1, $2)
 			`, info_hash, fmt.Sprintf("test infohash %d", i))
@@ -91,8 +91,9 @@ func countPeersReceived(recorder *httptest.ResponseRecorder) int {
 }
 
 func TestPeersStatsIncrement(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	requests := []testutils.Request{
 		{
@@ -121,7 +122,7 @@ func TestPeersStatsIncrement(t *testing.T) {
 		},
 	}
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -133,7 +134,7 @@ func TestPeersStatsIncrement(t *testing.T) {
 	var downloaded int
 	var uploaded int
 
-	err := conf.Dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(ctx, `
 		SELECT
 		    snatched, downloaded, uploaded
 		FROM
@@ -158,8 +159,9 @@ func TestPeersStatsIncrement(t *testing.T) {
 }
 
 func TestInfohashesDownloadedIncrement(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	request := testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -167,7 +169,7 @@ func TestInfohashesDownloadedIncrement(t *testing.T) {
 		Event:       config.Completed,
 	}
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
@@ -175,7 +177,7 @@ func TestInfohashesDownloadedIncrement(t *testing.T) {
 
 	var downloaded int
 
-	err := conf.Dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(ctx, `
 		SELECT
 		    downloaded
 		FROM
@@ -195,8 +197,9 @@ func TestInfohashesDownloadedIncrement(t *testing.T) {
 
 // TODO: Refactor these tests to not rely on fragile indexing into a slice.
 func TestPeersForSeeds(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	// Setup: A client with three seeds requesting three peers gets three.
 	// A client with no seeds requesting three peers gets one.
@@ -253,7 +256,7 @@ func TestPeersForSeeds(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -282,8 +285,9 @@ func TestPeersForSeeds(t *testing.T) {
 }
 
 func TestStopped(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForAnnounces, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForAnnounces, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	requests := []testutils.Request{
 		{
@@ -306,7 +310,7 @@ func TestStopped(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -330,13 +334,14 @@ func TestStopped(t *testing.T) {
 }
 
 func TestPeersForRatio(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForRatio, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForRatio, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	// Populate 50 seeders
-	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
+	seeders := createNSeeders(ctx, conf, 50, testutils.AllowedInfoHashes["a"])
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range seeders {
 		req := testutils.CreateTestAnnounce(r)
@@ -406,13 +411,14 @@ func TestPeersForRatio(t *testing.T) {
 // total torrents seeding. The expectations for this test are set by the values
 // encoded in algorithms.go.
 func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForGoodSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForGoodSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	// Populate 50 seeders
-	seeders := createNSeeders(conf, 50, testutils.AllowedInfoHashes["a"])
+	seeders := createNSeeders(ctx, conf, 50, testutils.AllowedInfoHashes["a"])
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range seeders {
 		req := testutils.CreateTestAnnounce(r)
@@ -445,7 +451,7 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 	}
 	goodSeederExpected := goodSeederRequest.Numwant
 
-	goodSeederSeeds := seedNTorrents(conf, 5, goodSeederRequest.AnnounceKey)
+	goodSeederSeeds := seedNTorrents(ctx, conf, 5, goodSeederRequest.AnnounceKey)
 	for _, r := range goodSeederSeeds {
 		req := testutils.CreateTestAnnounce(r)
 		w := httptest.NewRecorder()
@@ -467,8 +473,9 @@ func TestPeersForGoodSeedsBigSwarm(t *testing.T) {
 // all it verifies is that PeersForGoodSeeds works properly when the swarm
 // size is below minimumPeers.
 func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForGoodSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForGoodSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	// Peer 1 is seeding two torrents, but both with ratio > 1,
 	// so can receive all 4 peers.
@@ -510,7 +517,7 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -533,8 +540,9 @@ func TestPeersForGoodSeedsSmallSwarm(t *testing.T) {
 }
 
 func TestPeersForAnnounces(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForAnnounces, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForAnnounces, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	requests := []testutils.Request{
 		{
@@ -571,7 +579,7 @@ func TestPeersForAnnounces(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -595,8 +603,9 @@ func TestPeersForAnnounces(t *testing.T) {
 }
 
 func TestPeerList(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	requests := []testutils.Request{
 		{
@@ -621,7 +630,7 @@ func TestPeerList(t *testing.T) {
 
 	var dummyRequests []RequestResponseWrapper
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	for _, r := range requests {
 		req := testutils.CreateTestAnnounce(r)
@@ -641,8 +650,9 @@ func TestPeerList(t *testing.T) {
 }
 
 func TestDenylistInfoHash(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	request := testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -653,7 +663,7 @@ func TestDenylistInfoHash(t *testing.T) {
 	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	handler(w, req)
 
@@ -669,8 +679,9 @@ func TestDenylistInfoHash(t *testing.T) {
 }
 
 func TestDisableAllowlist(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	conf.DisableAllowlist = true
 
@@ -683,7 +694,7 @@ func TestDisableAllowlist(t *testing.T) {
 	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	handler(w, req)
 
@@ -698,7 +709,7 @@ func TestDisableAllowlist(t *testing.T) {
 	}
 
 	var found bool
-	err = conf.Dbpool.QueryRow(context.Background(), `
+	err = conf.Dbpool.QueryRow(ctx, `
 		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1)
 		`, request.Info_hash).Scan(&found)
 	if err != nil {
@@ -711,8 +722,9 @@ func TestDisableAllowlist(t *testing.T) {
 }
 
 func TestAnnounceWrite(t *testing.T) {
-	conf := testutils.BuildTestConfig(PeersForSeeds, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, PeersForSeeds, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	request := testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -723,7 +735,7 @@ func TestAnnounceWrite(t *testing.T) {
 	req := testutils.CreateTestAnnounce(request)
 	w := httptest.NewRecorder()
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	handler(w, req)
 
@@ -731,7 +743,7 @@ func TestAnnounceWrite(t *testing.T) {
 	var info_hash []byte
 	var last_announce time.Time
 
-	err := conf.Dbpool.QueryRow(context.Background(), `
+	err := conf.Dbpool.QueryRow(ctx, `
 		SELECT
 		    ip_port,
 		    info_hash,
@@ -766,10 +778,11 @@ func TestAnnounceWrite(t *testing.T) {
 }
 
 func TestUntrackedAnnounce(t *testing.T) {
-	conf := testutils.BuildTestConfig(DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
-	handler := PeerHandler(conf)
+	handler := PeerHandler(ctx, conf)
 
 	req := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.UntrackedAnnounceKey,

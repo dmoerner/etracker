@@ -84,7 +84,7 @@ func CreateTestAnnounce(request Request) *http.Request {
 	return newRequest
 }
 
-func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) config.Config {
+func BuildTestConfig(ctx context.Context, algorithm config.PeeringAlgorithm, authorization string) config.Config {
 	if _, ok := os.LookupEnv("PGUSER"); !ok {
 		log.Fatal("PGUSER not set in environment")
 	}
@@ -107,29 +107,29 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	})
 
 	// Always flush testing database before each run.
-	rdb.FlushDB(context.Background())
+	rdb.FlushDB(ctx)
 
-	dbpool, err := db.DbConnect()
+	dbpool, err := db.DbConnect(ctx)
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
 	// Although infohashes table normally persists, for testing it should be
 	// recreated each time.
-	_, err = dbpool.Exec(context.Background(), `
+	_, err = dbpool.Exec(ctx, `
 		DROP TABLE IF EXISTS infohashes CASCADE
 		`)
 	if err != nil {
 		log.Fatalf("Unable to clean up old infohashes table")
 	}
 
-	err = db.DbInitialize(dbpool)
+	err = db.DbInitialize(ctx, dbpool)
 	if err != nil {
 		log.Fatalf("Unable to initialize DB: %v", err)
 	}
 
 	for _, v := range AnnounceKeys {
-		_, err = dbpool.Exec(context.Background(), `
+		_, err = dbpool.Exec(ctx, `
 			INSERT INTO peers (announce_key)
 			    VALUES ($1)
 			`,
@@ -140,7 +140,7 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	}
 
 	for _, v := range AllowedInfoHashes {
-		_, err = dbpool.Exec(context.Background(), `
+		_, err = dbpool.Exec(ctx, `
 			INSERT INTO infohashes (info_hash, name)
 			    VALUES ($1, $2)
 			`,
@@ -161,20 +161,20 @@ func BuildTestConfig(algorithm config.PeeringAlgorithm, authorization string) co
 	return conf
 }
 
-func TeardownTest(conf config.Config) {
-	_, err := conf.Dbpool.Exec(context.Background(), `
+func TeardownTest(ctx context.Context, conf config.Config) {
+	_, err := conf.Dbpool.Exec(ctx, `
 		DROP TABLE IF EXISTS announces
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
-	_, err = conf.Dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(ctx, `
 		DROP TABLE IF EXISTS infohashes
 		`)
 	if err != nil {
 		log.Fatalf("error dropping table on db cleanup: %v", err)
 	}
-	_, err = conf.Dbpool.Exec(context.Background(), `
+	_, err = conf.Dbpool.Exec(ctx, `
 		DROP TABLE IF EXISTS peers
 		`)
 	if err != nil {

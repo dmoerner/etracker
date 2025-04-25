@@ -33,7 +33,7 @@ func NumwantPeers(conf config.Config, a *config.Announce) (int, error) {
 // A problem with this algorithm is that freeriders can get around limits by always
 // snatching more torrents. An improvement would count only torrents you are seeding,
 // not torrents you are leeching as well.
-func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
+func PeersForAnnounces(ctx context.Context, conf config.Config, a *config.Announce) (int, error) {
 	query := fmt.Sprintf(`
 		SELECT
 		    COUNT(*)
@@ -47,7 +47,7 @@ func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 		`,
 		config.StaleInterval)
 	var torrentCount int
-	err := conf.Dbpool.QueryRow(context.Background(), query, a.Announce_key, config.Stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(ctx, query, a.Announce_key, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining announce count: %w", err)
 	}
@@ -68,7 +68,7 @@ func PeersForAnnounces(conf config.Config, a *config.Announce) (int, error) {
 // of the number of torrents they are seeding.
 //
 // A problem with this algorithm is that it does not count partial seeders.
-func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
+func PeersForSeeds(ctx context.Context, conf config.Config, a *config.Announce) (int, error) {
 	query := fmt.Sprintf(`
 		SELECT
 		    COUNT(*)
@@ -83,7 +83,7 @@ func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 		`,
 		config.StaleInterval)
 	var torrentCount int
-	err := conf.Dbpool.QueryRow(context.Background(), query, a.Announce_key, config.Stopped).Scan(&torrentCount)
+	err := conf.Dbpool.QueryRow(ctx, query, a.Announce_key, config.Stopped).Scan(&torrentCount)
 	if err != nil {
 		return 0, fmt.Errorf("error determining seed count: %w", err)
 	}
@@ -115,7 +115,7 @@ func PeersForSeeds(conf config.Config, a *config.Announce) (int, error) {
 // clients with long uptime or clients with recent activity. However, this is a
 // necessary limitation of a public tracker algorithm which relies on peer_id's
 // which reset on restart, rather than an unchanging, unique announce URL.
-func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
+func PeersForGoodSeeds(ctx context.Context, conf config.Config, a *config.Announce) (int, error) {
 	if a.Numwant == 0 {
 		return 0, nil
 	}
@@ -137,7 +137,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		    last_announce DESC
 		`,
 		config.StaleInterval)
-	rows, err := conf.Dbpool.Query(context.Background(), query, a.Announce_key, config.Stopped)
+	rows, err := conf.Dbpool.Query(ctx, query, a.Announce_key, config.Stopped)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
 	}
@@ -206,7 +206,7 @@ func PeersForGoodSeeds(conf config.Config, a *config.Announce) (int, error) {
 		`,
 		config.StaleInterval)
 	var goodSeedCount int
-	err = conf.Dbpool.QueryRow(context.Background(), query, config.Stopped, minimumPeers).Scan(&goodSeedCount)
+	err = conf.Dbpool.QueryRow(ctx, query, config.Stopped, minimumPeers).Scan(&goodSeedCount)
 	if err != nil {
 		return 0, fmt.Errorf("error calculating current swarm seeder counts: %w", err)
 	}
@@ -256,7 +256,7 @@ func smoothFunction(x, numWanted, goodSeedCount int) int {
 // seeding, the peers count is adjusted by your ratio. To avoid extreme
 // inequalities and to not reward meaninglessly high ratios (which would
 // incentivize cheating), ratio is only counted up to maxRatio.
-func PeersForRatio(conf config.Config, a *config.Announce) (int, error) {
+func PeersForRatio(ctx context.Context, conf config.Config, a *config.Announce) (int, error) {
 	var ratio float64
 	var seedPercentage float64
 	query := fmt.Sprintf(`
@@ -292,7 +292,7 @@ func PeersForRatio(conf config.Config, a *config.Announce) (int, error) {
 		WHERE
 		    peers.announce_key = $2
 		`, config.StaleInterval)
-	err := conf.Dbpool.QueryRow(context.Background(), query, config.Stopped, a.Announce_key).Scan(&ratio, &seedPercentage)
+	err := conf.Dbpool.QueryRow(ctx, query, config.Stopped, a.Announce_key).Scan(&ratio, &seedPercentage)
 	if err != nil {
 		return 0, fmt.Errorf("error querying for rows: %w", err)
 	}

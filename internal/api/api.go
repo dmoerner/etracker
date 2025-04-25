@@ -92,14 +92,14 @@ func validateAPIKey(conf config.Config, w http.ResponseWriter, r *http.Request) 
 }
 
 // MuxAPIRoutes adds all the REST API routes to a mux.
-func MuxAPIRoutes(conf config.Config, mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/stats", StatsHandler(conf))
-	mux.HandleFunc("GET /api/generate", GenerateHandler(conf))
-	mux.HandleFunc("GET /api/infohashes", InfohashesHandler(conf))
-	mux.HandleFunc("POST /api/infohash", PostInfohashHandler(conf))
-	mux.HandleFunc("POST /api/torrentfile", PostTorrentFileHandler(conf))
-	mux.HandleFunc("GET /api/torrentfile", GetTorrentFileHandler(conf))
-	mux.HandleFunc("DELETE /api/infohash", DeleteInfohashHandler(conf))
+func MuxAPIRoutes(ctx context.Context, conf config.Config, mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/stats", StatsHandler(ctx, conf))
+	mux.HandleFunc("GET /api/generate", GenerateHandler(ctx, conf))
+	mux.HandleFunc("GET /api/infohashes", InfohashesHandler(ctx, conf))
+	mux.HandleFunc("POST /api/infohash", PostInfohashHandler(ctx, conf))
+	mux.HandleFunc("POST /api/torrentfile", PostTorrentFileHandler(ctx, conf))
+	mux.HandleFunc("GET /api/torrentfile", GetTorrentFileHandler(ctx, conf))
+	mux.HandleFunc("DELETE /api/infohash", DeleteInfohashHandler(ctx, conf))
 }
 
 // PostInfohashHandler takes a POST request to the /api/infohash endpoint, with
@@ -108,7 +108,7 @@ func MuxAPIRoutes(conf config.Config, mux *http.ServeMux) {
 // message on success or failure.
 //
 // This is an authorization-only endpoint.
-func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func PostInfohashHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validateAPIKey(conf, w, r) {
 			return
@@ -121,7 +121,7 @@ func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http
 			return
 		}
 
-		_, err = conf.Dbpool.Exec(context.Background(), `
+		_, err = conf.Dbpool.Exec(ctx, `
 		INSERT INTO infohashes (info_hash, name)
 		    VALUES ($1, $2)
 		`,
@@ -156,7 +156,7 @@ func PostInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http
 //
 // Both the PostInfohashHandler and PostTorrentFileHandler endpoints are supported because
 // the former makes testing easier, and may sometimes be convenient for public torrents.
-func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func PostTorrentFileHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validateAPIKey(conf, w, r) {
 			return
@@ -212,7 +212,7 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 		}
 
 		// Write to db.
-		_, err = conf.Dbpool.Exec(context.Background(), `
+		_, err = conf.Dbpool.Exec(ctx, `
 		INSERT INTO infohashes (info_hash, name, file, length)
 		    VALUES ($1, $2, $3, $4)
 		`,
@@ -244,7 +244,7 @@ func PostTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *h
 // message on success or failure.
 //
 // This is an authorization-only endpoint.
-func DeleteInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func DeleteInfohashHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !validateAPIKey(conf, w, r) {
 			return
@@ -257,7 +257,7 @@ func DeleteInfohashHandler(conf config.Config) func(w http.ResponseWriter, r *ht
 			return
 		}
 
-		_, err = conf.Dbpool.Exec(context.Background(), `
+		_, err = conf.Dbpool.Exec(ctx, `
 		DELETE FROM infohashes
 		WHERE info_hash = $1
 		`,
@@ -295,7 +295,7 @@ func ServeFrontend(frontendPath string) func(w http.ResponseWriter, r *http.Requ
 
 // InfohashesHandler presets a REST API on /frontend/infohashes which returns
 // an object including information on each tracked infohash.
-func InfohashesHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func InfohashesHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		enableCors(conf, &w, r)
 
@@ -332,7 +332,7 @@ func InfohashesHandler(conf config.Config) func(w http.ResponseWriter, r *http.R
 			`,
 			config.StaleInterval)
 
-		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
+		rows, err := conf.Dbpool.Query(ctx, query, config.Stopped)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not query database"})
 			return
@@ -355,7 +355,7 @@ func InfohashesHandler(conf config.Config) func(w http.ResponseWriter, r *http.R
 
 // StatsHandler presents a REST API on /frontendapi/stats which returns an object
 // including the total tracked infohashes, seeders, and leechers.
-func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func StatsHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		enableCors(conf, &w, r)
 		query := fmt.Sprintf(`
@@ -383,7 +383,7 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 			`,
 			config.StaleInterval)
 
-		rows, err := conf.Dbpool.Query(context.Background(), query, config.Stopped)
+		rows, err := conf.Dbpool.Query(ctx, query, config.Stopped)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not query database"})
 			return
@@ -404,10 +404,10 @@ func StatsHandler(conf config.Config) func(w http.ResponseWriter, r *http.Reques
 }
 
 // GenerateHandler returns a new announce key.
-func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func GenerateHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		enableCors(conf, &w, r)
-		announce_key, err := config.GenerateAnnounceKey(conf)
+		announce_key, err := config.GenerateAnnounceKey(ctx, conf)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, MessageJSON{"error: could not generate announce key"})
 			return
@@ -428,7 +428,7 @@ func GenerateHandler(conf config.Config) func(w http.ResponseWriter, r *http.Req
 // it returns a new torrent file with the appropriate announce URL.
 //
 // The info_hash is expected to be hex-encoded.
-func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *http.Request) {
+func GetTorrentFileHandler(ctx context.Context, conf config.Config) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 
@@ -440,7 +440,7 @@ func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *ht
 		}
 
 		var ok bool
-		err := conf.Dbpool.QueryRow(context.Background(), `
+		err := conf.Dbpool.QueryRow(ctx, `
 			SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1)
 			`,
 			announce_key).Scan(&ok)
@@ -469,7 +469,7 @@ func GetTorrentFileHandler(conf config.Config) func(w http.ResponseWriter, r *ht
 
 		var stripped_torrent_file []byte
 
-		err = conf.Dbpool.QueryRow(context.Background(), `
+		err = conf.Dbpool.QueryRow(ctx, `
 			SELECT file FROM infohashes WHERE info_hash = $1 AND file IS NOT NULL
 			`,
 			info_hash).Scan(&stripped_torrent_file)

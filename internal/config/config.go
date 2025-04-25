@@ -45,7 +45,7 @@ type Announce struct {
 	Event        Event
 }
 
-type PeeringAlgorithm func(config Config, a *Announce) (int, error)
+type PeeringAlgorithm func(ctx context.Context, config Config, a *Announce) (int, error)
 
 type Config struct {
 	Algorithm        PeeringAlgorithm
@@ -69,14 +69,14 @@ const AnnounceKeyLength = 30
 // keys. This has AnnounceKeyLength / 2 bytes of entropy. With adequate
 // AnnounceKeyLength we do not need to check for collisions. We also write the
 // new key to the database.
-func GenerateAnnounceKey(conf Config) (string, error) {
+func GenerateAnnounceKey(ctx context.Context, conf Config) (string, error) {
 	randomBytes := make([]byte, AnnounceKeyLength/2)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", fmt.Errorf("unable to generate new announce key: %w", err)
 	}
 	key := hex.EncodeToString(randomBytes)
 
-	_, err := conf.Dbpool.Exec(context.Background(), `
+	_, err := conf.Dbpool.Exec(ctx, `
 			INSERT INTO peers (announce_key)
 			    VALUES ($1)
 			`,
@@ -88,7 +88,7 @@ func GenerateAnnounceKey(conf Config) (string, error) {
 	return key, nil
 }
 
-func BuildConfig(algorithm PeeringAlgorithm) Config {
+func BuildConfig(ctx context.Context, algorithm PeeringAlgorithm) Config {
 	err := godotenv.Load()
 	if err != nil {
 		log.Print("Unable to load .env file, will use existing environment for configuration variables.")
@@ -118,7 +118,7 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 	})
 
 	// Flush Redis DB on startup, we always want a fresh cache.
-	rdb.FlushDB(context.Background())
+	rdb.FlushDB(ctx)
 
 	// An empty authorization string in the config means the API is forbidden.
 	// It is the responsibility of functions who use this struct key to forbid this.
@@ -144,12 +144,12 @@ func BuildConfig(algorithm PeeringAlgorithm) Config {
 		frontendHostname = envFrontendHostname
 	}
 
-	dbpool, err := db.DbConnect()
+	dbpool, err := db.DbConnect(ctx)
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
 
-	err = db.DbInitialize(dbpool)
+	err = db.DbInitialize(ctx, dbpool)
 	if err != nil {
 		log.Fatalf("Unable to initialize DB: %v", err)
 	}

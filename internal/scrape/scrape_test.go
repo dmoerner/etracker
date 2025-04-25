@@ -1,6 +1,7 @@
 package scrape
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http/httptest"
@@ -13,12 +14,13 @@ import (
 
 // This test tests both single and multiple query scrapes.
 func TestSpecificScrape(t *testing.T) {
-	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
 	// The database is pre-populated with allowed infohashes.
 
-	scrapeHandler := ScrapeHandler(conf)
+	scrapeHandler := ScrapeHandler(ctx, conf)
 
 	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -28,7 +30,7 @@ func TestSpecificScrape(t *testing.T) {
 	})
 	w := httptest.NewRecorder()
 
-	peerHandler := handler.PeerHandler(conf)
+	peerHandler := handler.PeerHandler(ctx, conf)
 	peerHandler(w, request)
 
 	request = httptest.NewRequest("GET",
@@ -61,10 +63,11 @@ func TestSpecificScrape(t *testing.T) {
 }
 
 func TestAllScrape(t *testing.T) {
-	conf := testutils.BuildTestConfig(handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(conf)
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
 
-	scrapeHandler := ScrapeHandler(conf)
+	scrapeHandler := ScrapeHandler(ctx, conf)
 
 	request := httptest.NewRequest("GET", "http://example.com/scrape", nil)
 	w := httptest.NewRecorder()
@@ -86,7 +89,7 @@ func TestAllScrape(t *testing.T) {
 	})
 	w = httptest.NewRecorder()
 
-	peerHandler := handler.PeerHandler(conf)
+	peerHandler := handler.PeerHandler(ctx, conf)
 	peerHandler(w, request)
 
 	request = httptest.NewRequest("GET", "http://example.com/scrape", nil)

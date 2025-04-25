@@ -7,9 +7,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
+func tableExists(ctx context.Context, dbpool *pgxpool.Pool, tablename string) (bool, error) {
 	var tableExists bool
-	err := dbpool.QueryRow(context.Background(), `
+	err := dbpool.QueryRow(ctx, `
 		SELECT
 		    EXISTS (
 			SELECT
@@ -24,13 +24,14 @@ func tableExists(dbpool *pgxpool.Pool, tablename string) (bool, error) {
 }
 
 func TestTables(t *testing.T) {
-	conf := BuildTestConfig(nil, DefaultAPIKey)
-	defer TeardownTest(conf)
+	ctx := context.Background()
+	conf := BuildTestConfig(ctx, nil, DefaultAPIKey)
+	defer TeardownTest(ctx, conf)
 
 	tables := []string{"announces", "infohashes", "peers"}
 
 	for _, table := range tables {
-		ok, err := tableExists(conf.Dbpool, table)
+		ok, err := tableExists(ctx, conf.Dbpool, table)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
@@ -39,12 +40,12 @@ func TestTables(t *testing.T) {
 			t.Fatalf("%s table does not exist", table)
 		}
 
-		_, err = conf.Dbpool.Exec(context.Background(), "DROP TABLE IF EXISTS "+table+" CASCADE")
+		_, err = conf.Dbpool.Exec(ctx, "DROP TABLE IF EXISTS "+table+" CASCADE")
 		if err != nil {
 			t.Fatalf("%v", err)
 		}
 
-		ok, err = tableExists(conf.Dbpool, table)
+		ok, err = tableExists(ctx, conf.Dbpool, table)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

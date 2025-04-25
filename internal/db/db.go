@@ -8,13 +8,13 @@ import (
 )
 
 // DbConnect connects to the postgres db.
-func DbConnect() (*pgxpool.Pool, error) {
+func DbConnect(ctx context.Context) (*pgxpool.Pool, error) {
 	config, err := pgxpool.ParseConfig("")
 	if err != nil {
 		return nil, fmt.Errorf("unable to get db config from environment: %w", err)
 	}
 
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)
+	dbpool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to connect to db: %w", err)
 	}
@@ -23,12 +23,12 @@ func DbConnect() (*pgxpool.Pool, error) {
 }
 
 // DbInitialize ensures that all required tables are set up.
-func DbInitialize(dbpool *pgxpool.Pool) error {
+func DbInitialize(ctx context.Context, dbpool *pgxpool.Pool) error {
 	// infohashes table. Includes info_hash, downloaded key (for use in /scrape),
 	// and an optional name, which should match the "name" section in the info
 	// section of the torrent file (for use in /scrape and searching), and
 	// an optional license (for verification, moderation, and search).
-	_, err := dbpool.Exec(context.Background(), `
+	_, err := dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS infohashes (
 		    id serial PRIMARY KEY,
 		    info_hash bytea NOT NULL UNIQUE,
@@ -48,7 +48,7 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// peer quality, and will in the future be extended to include
 	// statistics to detect cheaters. At the moment, the peer_max_upload
 	// key is written but not read.
-	_, err = dbpool.Exec(context.Background(), `
+	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS peers (
 		    id SERIAL PRIMARY KEY,
 		    announce_key TEXT NOT NULL UNIQUE,
@@ -68,7 +68,7 @@ func DbInitialize(dbpool *pgxpool.Pool) error {
 	// "left" is a reserved word so we use amount_left.
 	// For information on the triggers to keep track of announce times, see
 	// https://x-team.com/blog/automatic-timestamps-with-postgresql
-	_, err = dbpool.Exec(context.Background(), `
+	_, err = dbpool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS announces (
 		    id SERIAL PRIMARY KEY,
 		    peers_id INTEGER,
