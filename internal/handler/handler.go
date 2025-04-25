@@ -14,6 +14,7 @@ import (
 
 	"github.com/dmoerner/etracker/internal/bencode"
 	"github.com/dmoerner/etracker/internal/config"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -141,45 +142,116 @@ func parseAnnounce(r *http.Request) (*config.Announce, error) {
 // checkAnnounce checks announces for two conditions. First, is the announce
 // key being tracked? Second, if the infohash allowlist is enabled, is the infohash
 // allowed (otherwise it is tracked as well).
+//
+// Everything in checkAnnounce is stored in the Redis cache as a persistent key, since
+// these values change at most once during the runtime of the tracker.
 func checkAnnounce(conf config.Config, announce *config.Announce) error {
-	var tracked bool
-	err := conf.Dbpool.QueryRow(context.Background(), `
-		SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1);
-		`,
-		announce.Announce_key).Scan(&tracked)
+	tracked := true
+	tracked_cache, err := conf.Rdb.Get(context.Background(), "announce:"+announce.Announce_key).Result()
 	if err != nil {
-		return fmt.Errorf("error checking peers for announce: %w", err)
+		// Cache miss or failure
+		if err != redis.Nil {
+			// An issue with the cache must be logged but is not fatal.
+			log.Printf("Error fetching announce keys from cache: %v", err)
+		}
+		err = conf.Dbpool.QueryRow(context.Background(), `
+			SELECT EXISTS (SELECT FROM peers WHERE announce_key = $1);
+			`,
+			announce.Announce_key).Scan(&tracked)
+		if err != nil {
+			return fmt.Errorf("error checking peers for announce: %w", err)
+		}
+		if tracked {
+			tracked_cache = "true"
+		} else {
+			tracked_cache = "false"
+		}
+		err = conf.Rdb.Set(context.Background(), "announce:"+announce.Announce_key, tracked_cache, 0).Err()
+		if err != nil {
+			// An issue with the cache must be logged but is not fatal.
+			log.Printf("Error setting announce keys in cache: %v", err)
+		}
+	} else {
+		if tracked_cache == "false" {
+			tracked = false
+		}
 	}
 	if !tracked {
 		return ErrUntrackedAnnounce
 	}
 
 	if conf.DisableAllowlist {
-		_, err := conf.Dbpool.Exec(context.Background(), `
+		err = conf.Rdb.Get(context.Background(), "info_hash:"+string(announce.Info_hash)).Err()
+		if err != nil {
+			// Cache miss or failure
+			if err != redis.Nil {
+				// An issue with the cache must be logged but is not fatal.
+				log.Printf("Error fetching info_hash from cache: %v", err)
+			}
+			err = conf.Rdb.Set(context.Background(), "info_hash:"+string(announce.Info_hash), "true", 0).Err()
+			if err != nil {
+				// An issue with the cache must be logged but is not fatal.
+				log.Printf("Error setting info_hash in cache: %v", err)
+			}
+			_, err = conf.Dbpool.Exec(context.Background(), `
 			INSERT INTO infohashes (info_hash, name)
 			    VALUES ($1, $2)
 			ON CONFLICT (info_hash)
 			    DO NOTHING
 			`,
-			announce.Info_hash, "client added")
-		if err != nil {
-			fmt.Println(err)
-			return fmt.Errorf("error inserting announce_key: %w", err)
+				announce.Info_hash, "client added")
+			if err != nil {
+				fmt.Println(err)
+				return fmt.Errorf("error inserting announce_key: %w", err)
+			}
 		}
 		return nil
 	}
 
-	var allowed bool
-	err = conf.Dbpool.QueryRow(context.Background(), `
-		SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
-		`,
-		announce.Info_hash).Scan(&allowed)
+	allowed := true
+	allowed_cache, err := conf.Rdb.Get(context.Background(), "info_hash:"+string(announce.Info_hash)).Result()
 	if err != nil {
-		return fmt.Errorf("error checking infohashes: %w", err)
+		if err != redis.Nil {
+			// An issue with the cache must be logged but is not fatal.
+			log.Printf("Error fetching info_hash keys from cache: %v", err)
+		}
+		err = conf.Dbpool.QueryRow(context.Background(), `
+			SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
+			`,
+			announce.Info_hash).Scan(&allowed)
+		if err != nil {
+			return fmt.Errorf("error checking infohashes for info_hash: %w", err)
+		}
+		if allowed {
+			allowed_cache = "true"
+		} else {
+			allowed_cache = "false"
+		}
+		err = conf.Rdb.Set(context.Background(), "info_hash:"+string(announce.Info_hash), allowed_cache, 0).Err()
+		if err != nil {
+			// An issue with the cache must be logged but is not fatal.
+			log.Printf("Error setting info_hash keys in cache: %v", err)
+		}
+	} else {
+		if allowed_cache == "false" {
+			allowed = false
+		}
 	}
 	if !allowed {
 		return ErrInfoHashNotAllowed
 	}
+
+	// var allowed bool
+	// err = conf.Dbpool.QueryRow(context.Background(), `
+	// 	SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
+	// 	`,
+	// 	announce.Info_hash).Scan(&allowed)
+	// if err != nil {
+	// 	return fmt.Errorf("error checking infohashes: %w", err)
+	// }
+	// if !allowed {
+	// 	return ErrInfoHashNotAllowed
+	// }
 	return nil
 }
 
