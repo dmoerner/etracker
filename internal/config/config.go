@@ -117,9 +117,6 @@ func BuildConfig(ctx context.Context, algorithm PeeringAlgorithm) Config {
 		DB:       0, // Production DB
 	})
 
-	// Flush Redis DB on startup, we always want a fresh cache.
-	rdb.FlushDB(ctx)
-
 	// An empty authorization string in the config means the API is forbidden.
 	// It is the responsibility of functions who use this struct key to forbid this.
 	authorization, ok := os.LookupEnv("ETRACKER_AUTHORIZATION")

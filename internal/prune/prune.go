@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dmoerner/etracker/internal/config"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
@@ -31,11 +32,22 @@ func PruneAnnounceKeys(ctx context.Context, conf config.Config) error {
 		    OR MAX(announces.last_announce) < NOW() - INTERVAL '%d months')
 		AND (peers.created_time < NOW() - INTERVAL '%d months')
 		)
+		RETURNING
+		    peers.announce_key
 		`, PruneIntervalMonths, PruneIntervalMonths)
-	_, err := conf.Dbpool.Exec(ctx, query)
+	rows, _ := conf.Dbpool.Query(ctx, query)
+	keys, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
-		return fmt.Errorf("error pruning old announce keys: %w", err)
+		return fmt.Errorf("error pruning old announce keys from postgres: %w", err)
 	}
+	if len(keys) > 0 {
+		if err = conf.Rdb.Unlink(ctx, keys...).Err(); err != nil {
+			// Since the Redis DB is persistent, it is an error if we
+			// fail to invalidate these cache entries.
+			return fmt.Errorf("error pruning old announce keys from redis: %w", err)
+		}
+	}
+
 	return nil
 }
 
