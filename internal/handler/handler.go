@@ -241,17 +241,6 @@ func checkAnnounce(ctx context.Context, conf config.Config, announce *config.Ann
 		return ErrInfoHashNotAllowed
 	}
 
-	// var allowed bool
-	// err = conf.Dbpool.QueryRow(ctx, `
-	// 	SELECT EXISTS (SELECT FROM infohashes WHERE info_hash = $1);
-	// 	`,
-	// 	announce.Info_hash).Scan(&allowed)
-	// if err != nil {
-	// 	return fmt.Errorf("error checking infohashes: %w", err)
-	// }
-	// if !allowed {
-	// 	return ErrInfoHashNotAllowed
-	// }
 	return nil
 }
 
