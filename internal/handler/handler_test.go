@@ -802,3 +802,30 @@ func TestUntrackedAnnounce(t *testing.T) {
 		t.Errorf("did not reject untracked announce key")
 	}
 }
+
+// An attempt to start to benchmark core functions. Move as much setup as possible
+// outside of the benchmark loop. Preliminary benchmarking shows that using Redis to
+// cache announce key and infohash allowlist lookups leads to an improvement in speed
+// by a factor of 2.
+func BenchmarkPeersForRatio(b *testing.B) {
+	ctx := context.Background()
+	conf := testutils.BuildTestConfig(ctx, DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, conf)
+	handler := PeerHandler(ctx, conf)
+
+	peers := createNSeeders(ctx, conf, 10, testutils.AllowedInfoHashes["a"])
+
+	var reqs []http.Request
+
+	for _, peer := range peers {
+		reqs = append(reqs, *testutils.CreateTestAnnounce(peer))
+	}
+
+	w := httptest.NewRecorder()
+
+	for range b.N {
+		for _, req := range reqs {
+			handler(w, &req)
+		}
+	}
+}
