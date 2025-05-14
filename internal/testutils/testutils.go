@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 
 	"github.com/dmoerner/etracker/internal/config"
 	"github.com/dmoerner/etracker/internal/db"
 	"github.com/redis/go-redis/v9"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 const DefaultAPIKey = "testauthorizationkey"
@@ -44,6 +46,11 @@ type Request struct {
 	Downloaded  int
 	Left        int
 	Event       config.Event
+}
+
+type TestContainer struct {
+	pgs *postgres.PostgresContainer
+	rdb *tcredis.RedisContainer
 }
 
 func GeneratePeerID() string {
@@ -84,35 +91,47 @@ func CreateTestAnnounce(request Request) *http.Request {
 	return newRequest
 }
 
-func BuildTestConfig(ctx context.Context, algorithm config.PeeringAlgorithm, authorization string) config.Config {
-	if _, ok := os.LookupEnv("PGUSER"); !ok {
-		log.Fatal("PGUSER not set in environment")
+func BuildTestConfig(ctx context.Context, algorithm config.PeeringAlgorithm, authorization string) (*TestContainer, config.Config) {
+	dbName := "users"
+	dbUser := "testuser"
+	dbPassword := "testpassword"
+
+	pgsctr, err := postgres.Run(
+		ctx,
+		"postgres:17",
+		postgres.WithDatabase(dbName),
+		postgres.WithUsername(dbUser),
+		postgres.WithPassword(dbPassword),
+		postgres.BasicWaitStrategies(),
+		postgres.WithSQLDriver("pgx"),
+	)
+	if err != nil {
+		log.Fatal(err)
 	}
-	if _, ok := os.LookupEnv("PGPASSWORD"); !ok {
-		log.Fatal("PGPASSWORD not set in environment")
-	}
-	os.Setenv("PGDATABASE", "etracker_test")
-	os.Setenv("PGPORT", "5431")
-	os.Setenv("PGHOST", "localhost")
 
-	redis_password, ok := os.LookupEnv("ETRACKER_REDIS")
-	if !ok {
-		log.Fatal("ETRACKER_REDIS not set in environment.")
+	address, err := pgsctr.ConnectionString(ctx)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: redis_password,
-		DB:       1, // testing DB
-	})
-
-	// Always flush testing database before each run.
-	rdb.FlushDB(ctx)
-
-	dbpool, err := db.DbConnect(ctx)
+	dbpool, err := db.DbConnect(ctx, address)
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}
+
+	rdbctr, err := tcredis.Run(ctx, "redis:7.2")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	address, err = rdbctr.Endpoint(ctx, "")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rdb := redis.NewClient(&redis.Options{Addr: address})
+
+	tc := &TestContainer{pgs: pgsctr, rdb: rdbctr}
 
 	// Although infohashes table normally persists, for testing it should be
 	// recreated each time.
@@ -158,28 +177,16 @@ func BuildTestConfig(ctx context.Context, algorithm config.PeeringAlgorithm, aut
 		Rdb:           rdb,
 	}
 
-	return conf
+	return tc, conf
 }
 
-func TeardownTest(ctx context.Context, conf config.Config) {
-	_, err := conf.Dbpool.Exec(ctx, `
-		DROP TABLE IF EXISTS announces
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
-	}
-	_, err = conf.Dbpool.Exec(ctx, `
-		DROP TABLE IF EXISTS infohashes
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
-	}
-	_, err = conf.Dbpool.Exec(ctx, `
-		DROP TABLE IF EXISTS peers
-		`)
-	if err != nil {
-		log.Fatalf("error dropping table on db cleanup: %v", err)
+func TeardownTest(ctx context.Context, tc *TestContainer, conf config.Config) {
+	conf.Dbpool.Close()
+	if err := testcontainers.TerminateContainer(tc.pgs); err != nil {
+		log.Printf("failed to terminate container: %s", err)
 	}
 
-	conf.Dbpool.Close()
+	if err := testcontainers.TerminateContainer(tc.rdb); err != nil {
+		log.Printf("failed to terminate container: %s", err)
+	}
 }

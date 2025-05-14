@@ -141,7 +141,7 @@ func BuildConfig(ctx context.Context, algorithm PeeringAlgorithm) Config {
 		frontendHostname = envFrontendHostname
 	}
 
-	dbpool, err := db.DbConnect(ctx)
+	dbpool, err := db.DbConnect(ctx, "")
 	if err != nil {
 		log.Fatalf("Unable to connect to DB: %v", err)
 	}

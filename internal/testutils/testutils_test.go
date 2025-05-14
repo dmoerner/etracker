@@ -25,8 +25,8 @@ func tableExists(ctx context.Context, dbpool *pgxpool.Pool, tablename string) (b
 
 func TestTables(t *testing.T) {
 	ctx := context.Background()
-	conf := BuildTestConfig(ctx, nil, DefaultAPIKey)
-	defer TeardownTest(ctx, conf)
+	tc, conf := BuildTestConfig(ctx, nil, DefaultAPIKey)
+	defer TeardownTest(ctx, tc, conf)
 
 	tables := []string{"announces", "infohashes", "peers"}
 

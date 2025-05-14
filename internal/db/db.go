@@ -7,9 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DbConnect connects to the postgres db.
-func DbConnect(ctx context.Context) (*pgxpool.Pool, error) {
-	config, err := pgxpool.ParseConfig("")
+// DbConnect connects to the postgres db. On empty address,
+// use environmental variables. Address is only used for testing.
+func DbConnect(ctx context.Context, address string) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig(address)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get db config from environment: %w", err)
 	}

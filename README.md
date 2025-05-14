@@ -55,11 +55,7 @@ By default, `etracker` uses an allowlist for infohashes. You may turn this off b
 $ python3 scripts/add_infohash.py http://localhost:3000 "$ETRACKER_AUTHORIZATION" torrent_file.torrent
 ```
 
-`etracker` is written in Go and includes a test suite. You can run the test suite by installing Go and Docker (for the testing database), and then run:
-
-```
-$ make test
-```
+`etracker` is written in Go and includes a test suite, backed by [Testcontainers](https://golang.testcontainers.org/).
 
 # Technical Discussion: Free-Riding
 

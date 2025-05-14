@@ -12,8 +12,8 @@ import (
 
 func TestOldCreationOldAnnounces(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -76,8 +76,8 @@ func TestOldCreationOldAnnounces(t *testing.T) {
 
 func TestOldCreationRecentAnnounces(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -124,8 +124,8 @@ func TestOldCreationRecentAnnounces(t *testing.T) {
 
 func TestOldCreationNoAnnounces(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	query := fmt.Sprintf(`
 		UPDATE
@@ -163,8 +163,8 @@ func TestOldCreationNoAnnounces(t *testing.T) {
 
 func TestRecentCreationNoAnnounces(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	err := PruneAnnounceKeys(ctx, conf)
 	if err != nil {

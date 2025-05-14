@@ -35,8 +35,8 @@ type APIRequest struct {
 // the Authorization Header.
 func TestUnsetAuthorization(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, "")
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, "")
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	data := []struct {
 		name          string
@@ -67,8 +67,8 @@ func TestUnsetAuthorization(t *testing.T) {
 
 func TestAuthorizationHeader(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	data := []struct {
 		name          string
@@ -102,8 +102,8 @@ func TestAuthorizationHeader(t *testing.T) {
 
 func TestInsertDupeInfohash(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	data := []APIRequest{
 		// Inserting a duplicate key
@@ -145,8 +145,8 @@ func TestInsertDupeInfohash(t *testing.T) {
 
 func TestInsertBadInfohash(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	data := []APIRequest{
 		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("fffffffffffffffffffff"), testutils.DefaultAPIKey, "error: did not receive valid infohash", http.StatusBadRequest},
@@ -186,8 +186,8 @@ func TestInsertBadInfohash(t *testing.T) {
 
 func TestInsertRemoveInfohash(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	data := []APIRequest{
 		{"insert", "POST", "https://example.com:8080/api/infohash", []byte("ffffffffffffffffffff"), testutils.DefaultAPIKey, "success", http.StatusCreated},
@@ -262,8 +262,8 @@ func TestInsertRemoveInfohash(t *testing.T) {
 
 func TestInfohashes(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -330,8 +330,8 @@ func TestInfohashes(t *testing.T) {
 
 func TestStats(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	request := testutils.CreateTestAnnounce(testutils.Request{
 		AnnounceKey: testutils.AnnounceKeys[1],
@@ -372,8 +372,8 @@ func TestStats(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	request := httptest.NewRequest("GET", "http://example.com/frontendapi/generate", nil)
 	w := httptest.NewRecorder()
@@ -410,8 +410,8 @@ func TestGenerate(t *testing.T) {
 // rewritten.
 func TestPostGetTorrentFile(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, nil, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	postHandler := PostTorrentFileHandler(ctx, conf)
 	getHandler := GetTorrentFileHandler(ctx, conf)
@@ -503,7 +503,7 @@ func TestPostGetTorrentFile(t *testing.T) {
 }
 
 // func TestGetTorrentFile(t *testing.T) {
-// 	conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
+// 	tc, conf := testutils.BuildTestConfig(nil, testutils.DefaultAPIKey)
 // 	defer testutils.TeardownTest(conf)
 //
 // 	handler := GetTorrentFileHandler(conf)

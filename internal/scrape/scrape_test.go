@@ -15,8 +15,8 @@ import (
 // This test tests both single and multiple query scrapes.
 func TestSpecificScrape(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	// The database is pre-populated with allowed infohashes.
 
@@ -64,8 +64,8 @@ func TestSpecificScrape(t *testing.T) {
 
 func TestAllScrape(t *testing.T) {
 	ctx := context.Background()
-	conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
-	defer testutils.TeardownTest(ctx, conf)
+	tc, conf := testutils.BuildTestConfig(ctx, handler.DefaultAlgorithm, testutils.DefaultAPIKey)
+	defer testutils.TeardownTest(ctx, tc, conf)
 
 	scrapeHandler := ScrapeHandler(ctx, conf)
 
